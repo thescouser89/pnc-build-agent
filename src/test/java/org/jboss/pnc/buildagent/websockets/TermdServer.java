@@ -1,6 +1,6 @@
 package org.jboss.pnc.buildagent.websockets;
 
-import io.termd.core.http.undertow.UndertowProcessBootstrap;
+import org.jboss.pnc.buildagent.UndertowProcessBootstrap;
 
 import java.util.concurrent.Semaphore;
 
