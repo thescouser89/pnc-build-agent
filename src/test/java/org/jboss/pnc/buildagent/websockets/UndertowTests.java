@@ -61,7 +61,7 @@ public class UndertowTests {
   }
 
   @Test
-  public void clientShouldBeAbleToOpenWebSocketConnection() throws Exception {
+  public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults() throws Exception {
     String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
     String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
 
@@ -83,15 +83,8 @@ public class UndertowTests {
 
     Client client = setUpClient();
     Consumer<byte[]> responseConsumer = (bytes) -> {
-      String responseData = new String(bytes);//TODO encoding
-//      String response = new String(bytes);
-//      JsonObject jsonResponse = new JsonObject(response);
-//      String responseAction = jsonResponse.getString("action");
-//      if (responseAction == "status") {
-//        remoteResponseStatusWrapper.set(jsonResponse.getString("status"));;
-//      }
-//      String responseData = jsonResponse.getString("data");
-      if ("% ".equals(responseData)) {
+      String responseData = new String(bytes);
+      if ("% ".equals(responseData)) { //TODO use events
         if (!testCommandExecuted.get()) {
           testCommandExecuted.set(true);
           executeRemoteCommand(client, TEST_COMMAND);
