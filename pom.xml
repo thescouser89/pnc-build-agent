@@ -11,6 +11,7 @@
 
   <properties>
     <version.io.termd>1.0.0-SNAPSHOT</version.io.termd>
+    <version.undertow-websockets-jsr>1.2.6.Final</version.undertow-websockets-jsr>
     <version.junit>4.11</version.junit>
 
     <!-- maven-compiler-plugin -->
@@ -24,12 +25,22 @@
       <artifactId>termd-core</artifactId>
       <version>${version.io.termd}</version>
     </dependency>
+
+    <!-- Undertow -->
+    <dependency>
+      <groupId>io.undertow</groupId>
+      <artifactId>undertow-websockets-jsr</artifactId>
+      <version>${version.undertow-websockets-jsr}</version>
+    </dependency>
+
+    <!-- Test dependencies -->
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>${version.junit}</version>
       <scope>test</scope>
     </dependency>
+
   </dependencies>
 </project>
 
