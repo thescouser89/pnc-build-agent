@@ -1,5 +1,8 @@
 package org.jboss.pnc.buildagent;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.termd.core.http.BytesConsumer;
 import io.termd.core.http.Task;
 import io.termd.core.http.TaskStatusUpdateListener;
 import io.termd.core.util.Handler;
@@ -12,17 +15,14 @@ import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
+import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.vertx.java.core.json.JsonObject;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Scanner;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -30,17 +30,17 @@ import java.util.stream.Collectors;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class WebSocketBootstrap {
+public class UndertowBootstrap {
 
-  Logger log = LoggerFactory.getLogger(WebSocketBootstrap.class);
+  Logger log = LoggerFactory.getLogger(UndertowBootstrap.class);
 
   final String host;
   final int port;
-  final UndertowProcessBootstrap termdHandler;
+  final Main termdHandler;
   private final Executor executor = Executors.newFixedThreadPool(1);
   private final Collection<Task> runningTasks;
 
-  public WebSocketBootstrap(String host, int port, UndertowProcessBootstrap termdHandler, Collection runningTasks) {
+  public UndertowBootstrap(String host, int port, Main termdHandler, Collection runningTasks) {
     this.host = host;
     this.port = port;
     this.termdHandler = termdHandler;
@@ -52,7 +52,7 @@ public class WebSocketBootstrap {
     HttpHandler httpHandler = new HttpHandler() {
       @Override
       public void handleRequest(HttpServerExchange exchange) throws Exception {
-        WebSocketBootstrap.this.handleRequest(exchange);
+        UndertowBootstrap.this.handleRequest(exchange);
       }
     };
 
@@ -70,8 +70,8 @@ public class WebSocketBootstrap {
     String requestPath = exchange.getRequestPath();
     Sender responseSender = exchange.getResponseSender();
 
-    if ("/".equals(requestPath)) {
-      requestPath = "/index.html";
+    if ("/".equals(requestPath) || requestPath.startsWith("index.")) {
+      responseSender.send("Welcome to Web Shell.");
     }
 
     if (requestPath.equals("/term")) {
@@ -87,16 +87,16 @@ public class WebSocketBootstrap {
       return;
     }
 
-    try {
-      String resourcePath = "io/termd/core/http" + requestPath;
-      String content = readResource(resourcePath, this.getClass().getClassLoader());
-      responseSender.send(content);
-    } catch (Exception e) {
-      e.printStackTrace();
-      exchange.setResponseCode(404);
-    } finally {
-      responseSender.close();
-    }
+//    try {
+//      String resourcePath = "io/termd/core/http" + requestPath; //TODO static file server
+//      String content = readResource(resourcePath, this.getClass().getClassLoader());
+//      responseSender.send(content);
+//    } catch (Exception e) {
+//      e.printStackTrace();
+//      exchange.setResponseCode(404);
+//    } finally {
+//      responseSender.close();
+//    }
   }
 
   private HttpHandler getProcessStatusHandler() {
@@ -111,7 +111,7 @@ public class WebSocketBootstrap {
     WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
       @Override
       public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
-        WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
+        WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor, byteConsumer());
         termdHandler.getBootstrap().handle(conn.getTtyConnection());
       }
     };
@@ -120,18 +120,34 @@ public class WebSocketBootstrap {
     return webSocketHandshakeHandler;
   }
 
+  private BytesConsumer byteConsumer() {
+    return (bytes) -> {
+//      try {
+//        log.trace("Writing to file: {}", new String(bytes)); //TODO remove me
+//        fileChannel.write(ByteBuffer.wrap(bytes));
+//      } catch (IOException e) {
+//        log.error("Cannot write task {} output to fileChannel");
+//      }
+    };
+  }
+
   private HttpHandler webSocketStatusUpdateHandler() {
     WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
       @Override
       public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
         TaskStatusUpdateListener statusUpdateListener = (statusUpdateEvent) -> {
-          Map<String, String> statusUpdate = new HashMap<>();
-          statusUpdate.put("action", "\"status-update\"");
-          statusUpdate.put("event", statusUpdateEvent.toJson());
-          String statusUpdateJson = statusUpdate.entrySet().stream()
-              .map(entry -> "\"" + entry.getKey() + "\" : " + entry.getValue() + "")
-              .collect(Collectors.joining(","));
-          WebSockets.sendText("{" + statusUpdateJson + "}", webSocketChannel, null);
+          Map<String, Object> statusUpdate = new HashMap<>();
+          statusUpdate.put("action", "status-update");
+          TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
+//          statusUpdate.put("event", taskStatusUpdateEventWrapper.toJson());
+          statusUpdate.put("event", taskStatusUpdateEventWrapper);
+
+          ObjectMapper objectMapper = new ObjectMapper();
+          try {
+            WebSockets.sendText(objectMapper.writeValueAsString(statusUpdate), webSocketChannel, null);
+          } catch (JsonProcessingException e) {
+            e.printStackTrace();//TODO
+          }
         };
         log.debug("Registering new status update listener {}.", statusUpdateListener);
         termdHandler.addStatusUpdateListener(statusUpdateListener);
@@ -142,21 +158,4 @@ public class WebSocketBootstrap {
     HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
     return webSocketHandshakeHandler;
   }
-
-  private String readResource(String name, ClassLoader classLoader) throws IOException {
-    String configString;
-    InputStream is = classLoader.getResourceAsStream(name);
-    if (is == null) {
-      throw new IOException("Cannot read resource:" + name);
-    }
-    try {
-      configString = new Scanner(is, Charset.defaultCharset().name()).useDelimiter("\\A").next();
-    } finally {
-      if (is != null) {
-        is.close();
-      }
-    }
-    return configString;
-  }
-
 }

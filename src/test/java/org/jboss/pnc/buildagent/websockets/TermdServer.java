@@ -1,6 +1,6 @@
 package org.jboss.pnc.buildagent.websockets;
 
-import org.jboss.pnc.buildagent.UndertowProcessBootstrap;
+import org.jboss.pnc.buildagent.Main;
 
 import java.util.concurrent.Semaphore;
 
@@ -28,7 +28,7 @@ public class TermdServer {
         mutex.acquire();
         serverThread = new Thread(() -> {
             try {
-                new UndertowProcessBootstrap().start(host, port, onStart);
+                new Main().start(host, port, onStart);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }

@@ -79,7 +79,7 @@ public class Client {
             session.addMessageHandler(new MessageHandler.Whole<String>() {
                 @Override
                 public void onMessage(String message) {
-                    log.trace("Client received text message: {}", message);
+                    log.trace("Client received text MESSAGE: {}", message);
                     if (onStringMessageConsumer != null) {
                         onStringMessageConsumer.accept(message);
                     }
@@ -88,7 +88,7 @@ public class Client {
             session.addMessageHandler(new MessageHandler.Whole<byte[]>() {
                 @Override
                 public void onMessage(byte[] bytes) {
-                    log.trace("Client received binary message: {}", new String(bytes));
+                    log.trace("Client received binary MESSAGE: {}", new String(bytes));
                     if (onBinaryMessageConsumer != null) {
                         onBinaryMessageConsumer.accept(bytes);
                     }

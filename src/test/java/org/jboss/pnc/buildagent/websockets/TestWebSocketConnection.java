@@ -2,6 +2,8 @@ package org.jboss.pnc.buildagent.websockets;
 
 import io.termd.core.Status;
 import io.termd.core.util.ObjectWrapper;
+import org.jboss.pnc.buildagent.TestProcess;
+import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -14,18 +16,19 @@ import javax.websocket.CloseReason;
 import javax.websocket.RemoteEndpoint;
 import javax.websocket.Session;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -33,15 +36,18 @@ import java.util.stream.Collectors;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class UndertowTests {
+public class TestWebSocketConnection {
 
-  private static final Logger log = LoggerFactory.getLogger(UndertowTests.class);
+  private static final Logger log = LoggerFactory.getLogger(TestWebSocketConnection.class);
 
   private static final String HOST = "localhost";
   private static final String WEB_SOCKET_TERMINAL_PATH = "/term";
   private static final String WEB_SOCKET_LISTENER_PATH = "/process-status-updates";
   private static final int PORT = 8080;
-  private static final String TEST_COMMAND = "java -help";
+  private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.TestProcess 4";
+
+  private File logFolder = new File("/home/matej/workspace/soa-p/pnc-build-agent/"); //TODO log folder
+
 
 
   @BeforeClass
@@ -65,7 +71,7 @@ public class UndertowTests {
     String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
     String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
 
-    ObjectWrapper<List<String>> remoteResponseStatusWrapper = new ObjectWrapper<>(new ArrayList<>());
+    ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper = new ObjectWrapper<>(new ArrayList<>());
     Client statusListenerClient = connectStatusListenerClient(listenerUrl, remoteResponseStatusWrapper);
 
     ObjectWrapper<List<String>> remoteResponseWrapper = new ObjectWrapper<>(new ArrayList<>());
@@ -73,6 +79,7 @@ public class UndertowTests {
 
     assertThatResultWasReceived(remoteResponseWrapper, 5, ChronoUnit.SECONDS);
     assertThatCommandCompletedSuccessfully(remoteResponseStatusWrapper, 5, ChronoUnit.SECONDS);
+    assertThatLogWasWritten(remoteResponseStatusWrapper);
 
     commandExecutingClient.close();
     statusListenerClient.close();
@@ -106,10 +113,17 @@ public class UndertowTests {
     return client;
   }
 
-  private Client connectStatusListenerClient(String webSocketUrl, ObjectWrapper<List<String>> remoteResponseStatusWrapper) {
+  private Client connectStatusListenerClient(String webSocketUrl, ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper) {
     Client client = setUpClient();
     Consumer<String> responseConsumer = (text) -> {
-      remoteResponseStatusWrapper.get().add(text);
+      log.trace("Decoding response: {}", text);
+      JsonObject jsonObject = new JsonObject(text);
+      try {
+        TaskStatusUpdateEvent taskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(jsonObject.getField("event").toString());
+        remoteResponseStatusWrapper.get().add(taskStatusUpdateEvent);
+      } catch (IOException e) {
+        log.error("Cannot deserialize TaskStatusUpdateEvent.", e);
+      }
     };
     client.onStringMessage(responseConsumer);
 
@@ -138,7 +152,7 @@ public class UndertowTests {
         throw new AssertionError("Did not received expected response in " + timeout + " " + timeUnit);
       }
 
-      if (remoteResponses.contains("-classpath")) {
+      if (remoteResponses.contains(TestProcess.WELCOME_MESSAGE)) {
         responseContainsExpectedString = true;
         log.info("Remote responses: {}", remoteResponses);
         break;
@@ -149,7 +163,7 @@ public class UndertowTests {
     Assert.assertTrue("Response should contain output of " + TEST_COMMAND + ".", responseContainsExpectedString);
   }
 
-  private void assertThatCommandCompletedSuccessfully(ObjectWrapper<List<String>> remoteResponseStatusWrapper, long timeout, TemporalUnit timeUnit) throws InterruptedException {
+  private void assertThatCommandCompletedSuccessfully(ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper, long timeout, TemporalUnit timeUnit) throws InterruptedException {
 
     boolean responseContainsExpectedStatuses = false;
     LocalDateTime stared = LocalDateTime.now();
@@ -159,18 +173,13 @@ public class UndertowTests {
         throw new AssertionError("Did not received response status in " + timeout + " " + timeUnit);
       }
 
-      List<String> responses = remoteResponseStatusWrapper.get();
-      log.trace("Received status updates: " + responses);
-      Set<String> receivedStatuses = new HashSet<>();
+      List<TaskStatusUpdateEvent> receivedStatuses = remoteResponseStatusWrapper.get();
+      log.trace("Received status updates: " + receivedStatuses);
 
-      responses.forEach((response) -> {
-        log.trace("Decoding response: {}", response);
-        JsonObject jsonObject = new JsonObject(response);
-        receivedStatuses.add(jsonObject.getObject("event").getString("new-status"));
-      });
+      List<Status> collectedUpdates = receivedStatuses.stream().map(event -> event.getNewStatus()).collect(Collectors.toList());
 
-      if (receivedStatuses.contains(Status.RUNNING.toString()) &&
-          receivedStatuses.contains(Status.SUCCESSFULLY_COMPLETED.toString())) {
+      if (collectedUpdates.contains(Status.RUNNING) &&
+          collectedUpdates.contains(Status.SUCCESSFULLY_COMPLETED)) {
         responseContainsExpectedStatuses = true;
         break;
       } else {
@@ -178,6 +187,22 @@ public class UndertowTests {
       }
     }
     Assert.assertTrue("Response should contain status SUCCESS.", responseContainsExpectedStatuses);
+  }
+
+  private void assertThatLogWasWritten(ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper) throws IOException {
+    List<TaskStatusUpdateEvent> responses = remoteResponseStatusWrapper.get();
+    Optional<TaskStatusUpdateEvent> firstResponse = responses.stream().findFirst();
+    if (!firstResponse.isPresent()) {
+      throw new AssertionError("There is no status update event to retrieve task id.");
+    }
+
+    TaskStatusUpdateEvent taskStatusUpdateEvent = firstResponse.get();
+    String taskId = taskStatusUpdateEvent.getTaskId() + "";
+    File logFile = new File(logFolder, "console-" + taskId + ".log");
+    String fileContent = new String(Files.readAllBytes(logFile.toPath()));
+    Assert.assertTrue(fileContent.contains(TEST_COMMAND));
+    Assert.assertTrue(fileContent.contains("Hello again"));
+    Assert.assertTrue(fileContent.contains("# Finished with status: SUCCESSFULLY_COMPLETED"));
   }
 
   private void executeRemoteCommand(Client client, String command) {

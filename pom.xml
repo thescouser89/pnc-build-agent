@@ -63,7 +63,7 @@
           <configuration>
             <archive>
               <manifest>
-                <mainClass>org.jboss.pnc.buildagent.UndertowProcessBootstrap</mainClass>
+                <mainClass>org.jboss.pnc.buildagent.Main</mainClass>
               </manifest>
             </archive>
             <descriptorRefs>

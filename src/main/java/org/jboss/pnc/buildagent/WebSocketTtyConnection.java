@@ -1,5 +1,6 @@
 package org.jboss.pnc.buildagent;
 
+import io.termd.core.http.BytesConsumer;
 import io.termd.core.http.TtyConnectionBridge;
 import io.termd.core.util.Handler;
 import io.undertow.websockets.core.AbstractReceiveListener;
@@ -24,9 +25,20 @@ public class WebSocketTtyConnection {
 
   private  final TtyConnectionBridge ttyConnection;
 
-  public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor) {
+  /**
+   *
+   * @param webSocketChannel
+   * @param executor
+   * @param bytesConsumer optional consumer to be called when bytes are written to stdout and errout
+   */
+  public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor, BytesConsumer bytesConsumer) {
 
-    Handler<byte[]> onByteHandler = (bytes) -> WebSockets.sendBinary(ByteBuffer.wrap(bytes), webSocketChannel, null);
+    Handler<byte[]> onByteHandler = (bytes) -> {
+//      if (bytesConsumer != null) {
+//        bytesConsumer.accept(bytes);
+//      }
+      WebSockets.sendBinary(ByteBuffer.wrap(bytes), webSocketChannel, null);
+    };
     ttyConnection = new TtyConnectionBridge(onByteHandler, executor);
 
     registerWebSocketChannelListener(webSocketChannel);
