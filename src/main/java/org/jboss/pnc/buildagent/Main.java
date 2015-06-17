@@ -2,13 +2,11 @@ package org.jboss.pnc.buildagent;
 
 import io.termd.core.Status;
 import io.termd.core.http.Bootstrap;
-import io.termd.core.http.BytesConsumer;
 import io.termd.core.http.Task;
 import io.termd.core.http.TaskCreationListener;
 import io.termd.core.http.TaskStatusUpdateEvent;
 import io.termd.core.http.TaskStatusUpdateListener;
 import io.termd.core.tty.TtyConnection;
-import io.termd.core.util.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,9 +56,9 @@ public class Main {
 
     UndertowBootstrap undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
 
-    undertowBootstrap.bootstrap(new Handler<Boolean>() {
+    undertowBootstrap.bootstrap(new Consumer<Boolean>() {
       @Override
-      public void handle(Boolean event) {
+      public void accept(Boolean event) {
         if (event) {
           System.out.println("Server started on " + 8080);
           if (onStart != null) onStart.run();
@@ -120,8 +118,7 @@ public class Main {
       }
     };
 
-    BytesConsumer processOutputConsumer = (ints) -> {
-
+    Consumer<int[]> processOutputConsumer = (ints) -> {
       DataOutputStream out = new DataOutputStream(fileOutputStream);
       for (int anInt : ints) {
         try {
@@ -144,7 +141,7 @@ public class Main {
     }
   }
 
-  public Handler<TtyConnection> getBootstrap() {
+  public Consumer<TtyConnection> getBootstrap() {
     return bootstrap;
   }
 }

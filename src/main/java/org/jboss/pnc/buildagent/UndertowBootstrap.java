@@ -2,10 +2,8 @@ package org.jboss.pnc.buildagent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.termd.core.http.BytesConsumer;
 import io.termd.core.http.Task;
 import io.termd.core.http.TaskStatusUpdateListener;
-import io.termd.core.util.Handler;
 import io.undertow.Undertow;
 import io.undertow.io.Sender;
 import io.undertow.server.HttpHandler;
@@ -25,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -47,7 +46,7 @@ public class UndertowBootstrap {
     this.runningTasks = runningTasks;
   }
 
-  public void bootstrap(final Handler<Boolean> completionHandler) {
+  public void bootstrap(final Consumer<Boolean> completionHandler) {
 
     HttpHandler httpHandler = new HttpHandler() {
       @Override
@@ -63,7 +62,7 @@ public class UndertowBootstrap {
 
     undertow.start();
 
-    completionHandler.handle(true);
+    completionHandler.accept(true);
   }
 
   private void handleRequest(HttpServerExchange exchange) throws Exception {
@@ -111,24 +110,13 @@ public class UndertowBootstrap {
     WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
       @Override
       public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
-        WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor, byteConsumer());
-        termdHandler.getBootstrap().handle(conn.getTtyConnection());
+        WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
+        termdHandler.getBootstrap().accept(conn.getTtyConnection());
       }
     };
 
     HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
     return webSocketHandshakeHandler;
-  }
-
-  private BytesConsumer byteConsumer() {
-    return (bytes) -> {
-//      try {
-//        log.trace("Writing to file: {}", new String(bytes)); //TODO remove me
-//        fileChannel.write(ByteBuffer.wrap(bytes));
-//      } catch (IOException e) {
-//        log.error("Cannot write task {} output to fileChannel");
-//      }
-    };
   }
 
   private HttpHandler webSocketStatusUpdateHandler() {
@@ -139,7 +127,6 @@ public class UndertowBootstrap {
           Map<String, Object> statusUpdate = new HashMap<>();
           statusUpdate.put("action", "status-update");
           TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
-//          statusUpdate.put("event", taskStatusUpdateEventWrapper.toJson());
           statusUpdate.put("event", taskStatusUpdateEventWrapper);
 
           ObjectMapper objectMapper = new ObjectMapper();

@@ -1,8 +1,6 @@
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.http.BytesConsumer;
 import io.termd.core.http.TtyConnectionBridge;
-import io.termd.core.util.Handler;
 import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedBinaryMessage;
 import io.undertow.websockets.core.WebSocketChannel;
@@ -15,6 +13,7 @@ import org.xnio.Pooled;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -23,20 +22,14 @@ public class WebSocketTtyConnection {
 
   private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
 
-  private  final TtyConnectionBridge ttyConnection;
+  private final TtyConnectionBridge ttyConnection;
 
   /**
-   *
    * @param webSocketChannel
    * @param executor
-   * @param bytesConsumer optional consumer to be called when bytes are written to stdout and errout
    */
-  public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor, BytesConsumer bytesConsumer) {
-
-    Handler<byte[]> onByteHandler = (bytes) -> {
-//      if (bytesConsumer != null) {
-//        bytesConsumer.accept(bytes);
-//      }
+  public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor) {
+    Consumer<byte[]> onByteHandler = (bytes) -> {
       WebSockets.sendBinary(ByteBuffer.wrap(bytes), webSocketChannel, null);
     };
     ttyConnection = new TtyConnectionBridge(onByteHandler, executor);

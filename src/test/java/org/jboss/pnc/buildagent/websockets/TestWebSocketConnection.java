@@ -199,10 +199,12 @@ public class TestWebSocketConnection {
     TaskStatusUpdateEvent taskStatusUpdateEvent = firstResponse.get();
     String taskId = taskStatusUpdateEvent.getTaskId() + "";
     File logFile = new File(logFolder, "console-" + taskId + ".log");
+    Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
+
     String fileContent = new String(Files.readAllBytes(logFile.toPath()));
-    Assert.assertTrue(fileContent.contains(TEST_COMMAND));
-    Assert.assertTrue(fileContent.contains("Hello again"));
-    Assert.assertTrue(fileContent.contains("# Finished with status: SUCCESSFULLY_COMPLETED"));
+    Assert.assertTrue("Missing executed command.", fileContent.contains(TEST_COMMAND));
+    Assert.assertTrue("Missing response message.", fileContent.contains("Hello again"));
+    Assert.assertTrue("Missing ot invalid completion state.", fileContent.contains("# Finished with status: SUCCESSFULLY_COMPLETED"));
   }
 
   private void executeRemoteCommand(Client client, String command) {
