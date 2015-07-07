@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -33,7 +34,7 @@ public class Main {
   private final List<Task> runningTasks = new ArrayList<>();
 
   private final Set<TaskStatusUpdateListener> statusUpdateListeners = new HashSet<>();
-  private File logFolder = new File("/home/matej/workspace/soa-p/pnc-build-agent/"); //TODO log folder
+  private File logFolder = Paths.get("").toFile();
   private Charset charset = Charset.forName("UTF-8");
 
 

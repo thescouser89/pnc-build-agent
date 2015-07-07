@@ -2,6 +2,7 @@ package org.jboss.pnc.buildagent.websockets;
 
 import io.termd.core.Status;
 import io.termd.core.util.ObjectWrapper;
+import org.jboss.pnc.buildagent.TermdServer;
 import org.jboss.pnc.buildagent.TestProcess;
 import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.junit.AfterClass;
@@ -41,9 +42,9 @@ public class TestWebSocketConnection {
   private static final Logger log = LoggerFactory.getLogger(TestWebSocketConnection.class);
 
   private static final String HOST = "localhost";
+  private static final int PORT = 8080;
   private static final String WEB_SOCKET_TERMINAL_PATH = "/term";
   private static final String WEB_SOCKET_LISTENER_PATH = "/process-status-updates";
-  private static final int PORT = 8080;
   private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.TestProcess 4";
 
   private File logFolder = new File("/home/matej/workspace/soa-p/pnc-build-agent/"); //TODO log folder

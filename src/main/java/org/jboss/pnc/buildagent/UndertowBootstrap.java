@@ -4,20 +4,28 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.http.Task;
 import io.termd.core.http.TaskStatusUpdateListener;
+import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.io.Sender;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.server.handlers.PathHandler;
+import io.undertow.servlet.api.DeploymentInfo;
+import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
+import org.jboss.pnc.buildagent.servlet.Download;
+import org.jboss.pnc.buildagent.servlet.Upload;
+import org.jboss.pnc.buildagent.servlet.Welcome;
 import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.vertx.java.core.json.JsonObject;
 
+import javax.servlet.ServletException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +33,10 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+import static io.undertow.servlet.Servlets.defaultContainer;
+import static io.undertow.servlet.Servlets.deployment;
+import static io.undertow.servlet.Servlets.servlet;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -48,16 +60,39 @@ public class UndertowBootstrap {
 
   public void bootstrap(final Consumer<Boolean> completionHandler) {
 
-    HttpHandler httpHandler = new HttpHandler() {
-      @Override
-      public void handleRequest(HttpServerExchange exchange) throws Exception {
-        UndertowBootstrap.this.handleRequest(exchange);
-      }
-    };
+    String servletPath = "/";
+    String socketPath = "/socket";
+
+    DeploymentInfo servletBuilder = deployment()
+        .setClassLoader(UndertowBootstrap.class.getClassLoader())
+        .setContextPath(servletPath)
+        .setDeploymentName("ROOT.war")
+        .addServlets(
+            servlet("WelcomeServlet", Welcome.class)
+                .addMapping("/")
+                .addMapping("/index"),
+            servlet("UploaderServlet", Upload.class)
+                .addMapping("/upload/*"),
+            servlet("DownloaderServlet", Download.class)
+                .addMapping("/download/*"));
+
+    DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
+    manager.deploy();
+
+    HttpHandler servletHandler = null;
+    try {
+      servletHandler = manager.start();
+    } catch (ServletException e) {
+      e.printStackTrace();//TODO handle exception
+    }
+
+    PathHandler pathHandler = Handlers.path(Handlers.redirect(servletPath))
+        .addPrefixPath(servletPath, servletHandler)
+        .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleRequest(exchange));
 
     Undertow undertow = Undertow.builder()
       .addHttpListener(port, host)
-      .setHandler(httpHandler)
+      .setHandler(pathHandler)
       .build();
 
     undertow.start();
@@ -68,10 +103,6 @@ public class UndertowBootstrap {
   private void handleRequest(HttpServerExchange exchange) throws Exception {
     String requestPath = exchange.getRequestPath();
     Sender responseSender = exchange.getResponseSender();
-
-    if ("/".equals(requestPath) || requestPath.startsWith("index.")) {
-      responseSender.send("Welcome to Web Shell.");
-    }
 
     if (requestPath.equals("/term")) {
       getWebSocketHandler().handleRequest(exchange);
@@ -86,6 +117,11 @@ public class UndertowBootstrap {
       return;
     }
 
+    if (requestPath.startsWith("/upload/")) {
+      getFileUploadHandler().handleRequest(exchange);
+      return;
+    }
+
 //    try {
 //      String resourcePath = "io/termd/core/http" + requestPath; //TODO static file server
 //      String content = readResource(resourcePath, this.getClass().getClassLoader());
@@ -96,6 +132,10 @@ public class UndertowBootstrap {
 //    } finally {
 //      responseSender.close();
 //    }
+  }
+
+  private HttpHandler getFileUploadHandler() {
+    return null;
   }
 
   private HttpHandler getProcessStatusHandler() {

@@ -1,6 +1,4 @@
-package org.jboss.pnc.buildagent.websockets;
-
-import org.jboss.pnc.buildagent.Main;
+package org.jboss.pnc.buildagent;
 
 import java.util.concurrent.Semaphore;
 
@@ -19,7 +17,7 @@ public class TermdServer {
      * @param host
      * @param port
      */
-    static void startServer(String host, int port) throws InterruptedException {
+    public static void startServer(String host, int port) throws InterruptedException {
         Semaphore mutex = new Semaphore(1);
         Runnable onStart = () ->  {
             System.out.println("Server started."); //TODO log
@@ -38,7 +36,7 @@ public class TermdServer {
         mutex.acquire();
     }
 
-    static void stopServer() {
+    public static void stopServer() {
         System.out.println("Stopping server..."); //TODO log
         serverThread.interrupt();
     }
