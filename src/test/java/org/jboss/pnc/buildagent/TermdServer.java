@@ -19,13 +19,20 @@
 package org.jboss.pnc.buildagent;
 
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public class TermdServer {
 
+    private static final AtomicInteger port_pool = new AtomicInteger(8080);
+
     private static Thread serverThread;
+
+    public static int getNextPort() {
+        return port_pool.getAndIncrement();
+    }
 
     /**
      * Try to start the build agent and block until it is up and running.
@@ -58,4 +65,5 @@ public class TermdServer {
         System.out.println("Stopping server..."); //TODO log
         serverThread.interrupt();
     }
+
 }

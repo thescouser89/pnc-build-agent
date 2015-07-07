@@ -42,6 +42,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
@@ -60,13 +61,12 @@ public class TestWebSocketConnection {
     private static final Logger log = LoggerFactory.getLogger(TestWebSocketConnection.class);
 
     private static final String HOST = "localhost";
-    private static final int PORT = 8080;
-    private static final String WEB_SOCKET_TERMINAL_PATH = "/term";
-    private static final String WEB_SOCKET_LISTENER_PATH = "/process-status-updates";
+    private static final int PORT = TermdServer.getNextPort();
+    private static final String WEB_SOCKET_TERMINAL_PATH = "/socket/term";
+    private static final String WEB_SOCKET_LISTENER_PATH = "/socket/process-status-updates";
     private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.TestProcess 4";
 
-    private File logFolder = new File("/home/matej/workspace/soa-p/pnc-build-agent/"); //TODO log folder
-
+    private File logFolder = Paths.get("").toAbsolutePath().toFile();
 
     @BeforeClass
     public static void setUP() throws Exception {

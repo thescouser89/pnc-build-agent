@@ -39,7 +39,7 @@ import java.util.Scanner;
 public class TestFileUpload {
 
     private static final String HOST = "localhost";
-    private static final int PORT = 8080;
+    private static final int PORT = TermdServer.getNextPort();
 
     private static Logger log = LoggerFactory.getLogger(TestFileUpload.class);
 

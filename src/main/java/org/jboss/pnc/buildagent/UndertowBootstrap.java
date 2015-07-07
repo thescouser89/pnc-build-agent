@@ -122,11 +122,11 @@ public class UndertowBootstrap {
         String requestPath = exchange.getRequestPath();
         Sender responseSender = exchange.getResponseSender();
 
-        if (requestPath.equals("/term")) {
+        if (requestPath.equals("/socket/term")) {
             getWebSocketHandler().handleRequest(exchange);
             return;
         }
-        if (requestPath.equals("/process-status-updates")) {
+        if (requestPath.equals("/socket/process-status-updates")) {
             webSocketStatusUpdateHandler().handleRequest(exchange);
             return;
         }

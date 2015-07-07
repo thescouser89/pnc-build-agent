@@ -52,7 +52,7 @@ public class Main {
     private final List<Task> runningTasks = new ArrayList<>();
 
     private final Set<TaskStatusUpdateListener> statusUpdateListeners = new HashSet<>();
-    private File logFolder = Paths.get("").toFile();
+    private File logFolder = Paths.get("").toAbsolutePath().toFile();
     private Charset charset = Charset.forName("UTF-8");
 
 
@@ -78,7 +78,7 @@ public class Main {
             @Override
             public void accept(Boolean event) {
                 if (event) {
-                    System.out.println("Server started on " + 8080);
+                    System.out.println("Server started on " + port);
                     if (onStart != null) onStart.run();
                 } else {
                     System.out.println("Could not start");
