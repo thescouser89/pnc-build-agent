@@ -18,7 +18,7 @@
 
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.http.TtyConnectionBridge;
+import io.termd.core.http.HttpTtyConnection;
 import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedBinaryMessage;
 import io.undertow.websockets.core.WebSocketChannel;
@@ -31,26 +31,29 @@ import org.xnio.Pooled;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class WebSocketTtyConnection {
+public class WebSocketTtyConnection extends HttpTtyConnection {
 
     private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
+    private final WebSocketChannel webSocketChannel;
+    private final Executor executor;
 
-    private final TtyConnectionBridge ttyConnection;
+    @Override
+    protected void write(byte[] buffer) {
+        WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+    }
 
-    /**
-     * @param webSocketChannel
-     * @param executor
-     */
+    @Override
+    public void schedule(Runnable task) {
+        executor.execute(task);
+    }
+
     public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor) {
-        Consumer<byte[]> onByteHandler = (bytes) -> {
-            WebSockets.sendBinary(ByteBuffer.wrap(bytes), webSocketChannel, null);
-        };
-        ttyConnection = new TtyConnectionBridge(onByteHandler, executor);
+        this.webSocketChannel = webSocketChannel;
+        this.executor = executor;
 
         registerWebSocketChannelListener(webSocketChannel);
         webSocketChannel.resumeReceives();
@@ -68,16 +71,12 @@ public class WebSocketTtyConnection {
                     ByteBuffer byteBuffer = WebSockets.mergeBuffers(resource);
                     String msg = new String(byteBuffer.array());
                     log.trace("Sending message to decoder: {}", msg);
-                    ttyConnection.writeToDecoder(msg);
+                    writeToDecoder(msg);
                 } finally {
                     pulledData.discard();
                 }
             }
         };
         webSocketChannel.getReceiveSetter().set(listener);
-    }
-
-    public TtyConnectionBridge getTtyConnection() {
-        return ttyConnection;
     }
 }

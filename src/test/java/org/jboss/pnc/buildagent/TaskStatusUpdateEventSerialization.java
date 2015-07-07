@@ -18,8 +18,9 @@
 
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.Status;
-import io.termd.core.http.Task;
+import io.termd.core.pty.PtyMaster;
+import io.termd.core.pty.PtyStatusEvent;
+import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.junit.Assert;
 import org.junit.Test;
@@ -37,8 +38,8 @@ public class TaskStatusUpdateEventSerialization {
 
     @Test
     public void testTaskStatusUpdateEventSerialization() throws IOException {
-        Task task = new Task(null, null, null, "");
-        io.termd.core.http.TaskStatusUpdateEvent termTaskStatusUpdateEvent = new io.termd.core.http.TaskStatusUpdateEvent(task, Status.NEW, Status.RUNNING);
+        PtyMaster task = new PtyMaster(null, null, null, "");
+        PtyStatusEvent termTaskStatusUpdateEvent = new PtyStatusEvent(task, Status.NEW, Status.RUNNING);
 
         TaskStatusUpdateEvent taskStatusUpdateEvent = new TaskStatusUpdateEvent(termTaskStatusUpdateEvent);
         String taskId = taskStatusUpdateEvent.getTaskId();

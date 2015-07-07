@@ -18,12 +18,10 @@
 
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.Status;
-import io.termd.core.http.Bootstrap;
-import io.termd.core.http.Task;
-import io.termd.core.http.TaskCreationListener;
-import io.termd.core.http.TaskStatusUpdateEvent;
-import io.termd.core.http.TaskStatusUpdateListener;
+import io.termd.core.pty.PtyBootstrap;
+import io.termd.core.pty.PtyMaster;
+import io.termd.core.pty.PtyStatusEvent;
+import io.termd.core.pty.Status;
 import io.termd.core.tty.TtyConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,20 +45,20 @@ public class Main {
 
     Logger log = LoggerFactory.getLogger(Main.class);
 
-    Bootstrap bootstrap;
+    PtyBootstrap ptyBootstrap;
 
-    private final List<Task> runningTasks = new ArrayList<>();
+    private final List<PtyMaster> runningTasks = new ArrayList<>();
 
-    private final Set<TaskStatusUpdateListener> statusUpdateListeners = new HashSet<>();
+    private final Set<Consumer<PtyStatusEvent>> statusUpdateListeners = new HashSet<>();
     private File logFolder = Paths.get("").toAbsolutePath().toFile();
     private Charset charset = Charset.forName("UTF-8");
 
 
-    public boolean addStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
+    public boolean addStatusUpdateListener(Consumer<PtyStatusEvent> statusUpdateListener) {
         return statusUpdateListeners.add(statusUpdateListener);
     }
 
-    public boolean removeStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
+    public boolean removeStatusUpdateListener(Consumer<PtyStatusEvent> statusUpdateListener) {
         return statusUpdateListeners.remove(statusUpdateListener);
     }
 
@@ -70,7 +68,7 @@ public class Main {
 
 
     public void start(String host, int port, final Runnable onStart) throws InterruptedException {
-        bootstrap = new Bootstrap(taskCreationListener());
+        ptyBootstrap = new PtyBootstrap(taskCreationListener());
 
         UndertowBootstrap undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
 
@@ -87,24 +85,24 @@ public class Main {
         });
     }
 
-    private TaskCreationListener taskCreationListener() {
-        return (task) -> {
+    private Consumer<PtyMaster> taskCreationListener() {
+        return (ptyMaster) -> {
             try {
-                FileOutputStream fileOutputStream = registerProcessLogger(task);
-                task.setTaskStatusUpdateListener(taskStatusUpdateListener(fileOutputStream));
-                runningTasks.add(task);
+                FileOutputStream fileOutputStream = registerProcessLogger(ptyMaster);
+                ptyMaster.setTaskStatusUpdateListener(taskStatusUpdateListener(fileOutputStream));
+                runningTasks.add(ptyMaster);
             } catch (IOException e) {
                 log.error("Cannot open fileChannel: ", e);
             }
         };
     }
 
-    private TaskStatusUpdateListener taskStatusUpdateListener(FileOutputStream fileOutputStream) {
+    private Consumer<PtyStatusEvent> taskStatusUpdateListener (FileOutputStream fileOutputStream) {
         return (taskStatusUpdateEvent) -> {
-            Task task = taskStatusUpdateEvent.getTask();
+            PtyMaster task = taskStatusUpdateEvent.getProcess();
             Status newStatus = taskStatusUpdateEvent.getNewStatus();
             switch (newStatus) {
-                case SUCCESSFULLY_COMPLETED:
+                case COMPLETED:
                 case FAILED:
                 case INTERRUPTED:
                     runningTasks.remove(task);
@@ -121,7 +119,7 @@ public class Main {
         };
     }
 
-    private FileOutputStream registerProcessLogger(Task task) throws IOException {
+    private FileOutputStream registerProcessLogger(PtyMaster task) throws IOException {
         File logFile = new File(logFolder, "console-" + task.getId() + ".log");
 
         log.info("Opening log file ...");
@@ -153,14 +151,14 @@ public class Main {
         return fileOutputStream;
     }
 
-    void notifyStatusUpdated(TaskStatusUpdateEvent statusUpdateEvent) {
-        for (TaskStatusUpdateListener statusUpdateListener : statusUpdateListeners) {
+    void notifyStatusUpdated(PtyStatusEvent statusUpdateEvent) {
+        for (Consumer<PtyStatusEvent> statusUpdateListener : statusUpdateListeners) {
             log.debug("Notifying listener {} status update {}", statusUpdateListener, statusUpdateEvent);
             statusUpdateListener.accept(statusUpdateEvent);
         }
     }
 
-    public Consumer<TtyConnection> getBootstrap() {
-        return bootstrap;
+    public Consumer<TtyConnection> getPtyBootstrap() {
+        return ptyBootstrap;
     }
 }

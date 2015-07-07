@@ -18,18 +18,19 @@
 
 package org.jboss.pnc.buildagent.websockets;
 
-import io.termd.core.Status;
-import io.termd.core.util.ObjectWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.TermdServer;
 import org.jboss.pnc.buildagent.TestProcess;
 import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
+import org.jboss.pnc.common.util.ObjectWrapper;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.vertx.java.core.json.JsonObject;
 
 import javax.websocket.CloseReason;
 import javax.websocket.RemoteEndpoint;
@@ -135,9 +136,16 @@ public class TestWebSocketConnection {
         Client client = setUpClient();
         Consumer<String> responseConsumer = (text) -> {
             log.trace("Decoding response: {}", text);
-            JsonObject jsonObject = new JsonObject(text);
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode jsonObject = null;
             try {
-                TaskStatusUpdateEvent taskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(jsonObject.getField("event").toString());
+                jsonObject = mapper.readTree(text);
+            } catch (IOException e) {
+                e.printStackTrace(); //TODO
+            }
+            try {
+                TaskStatusUpdateEvent taskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(jsonObject.get("event").toString());
                 remoteResponseStatusWrapper.get().add(taskStatusUpdateEvent);
             } catch (IOException e) {
                 log.error("Cannot deserialize TaskStatusUpdateEvent.", e);
@@ -197,7 +205,7 @@ public class TestWebSocketConnection {
             List<Status> collectedUpdates = receivedStatuses.stream().map(event -> event.getNewStatus()).collect(Collectors.toList());
 
             if (collectedUpdates.contains(Status.RUNNING) &&
-                    collectedUpdates.contains(Status.SUCCESSFULLY_COMPLETED)) {
+                    collectedUpdates.contains(Status.COMPLETED)) {
                 responseContainsExpectedStatuses = true;
                 break;
             } else {
@@ -222,7 +230,7 @@ public class TestWebSocketConnection {
         String fileContent = new String(Files.readAllBytes(logFile.toPath()));
         Assert.assertTrue("Missing executed command.", fileContent.contains(TEST_COMMAND));
         Assert.assertTrue("Missing response message.", fileContent.contains("Hello again"));
-        Assert.assertTrue("Missing ot invalid completion state.", fileContent.contains("# Finished with status: SUCCESSFULLY_COMPLETED"));
+        Assert.assertTrue("Missing or invalid completion state.", fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()));
     }
 
     private void executeRemoteCommand(Client client, String command) {

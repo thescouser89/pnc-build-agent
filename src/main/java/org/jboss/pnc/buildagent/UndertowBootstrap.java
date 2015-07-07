@@ -20,8 +20,8 @@ package org.jboss.pnc.buildagent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.termd.core.http.Task;
-import io.termd.core.http.TaskStatusUpdateListener;
+import io.termd.core.pty.PtyMaster;
+import io.termd.core.pty.PtyStatusEvent;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.io.Sender;
@@ -41,7 +41,6 @@ import org.jboss.pnc.buildagent.servlet.Welcome;
 import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.vertx.java.core.json.JsonObject;
 
 import javax.servlet.ServletException;
 import java.util.Collection;
@@ -67,7 +66,7 @@ public class UndertowBootstrap {
     final int port;
     final Main termdHandler;
     private final Executor executor = Executors.newFixedThreadPool(1);
-    private final Collection<Task> runningTasks;
+    private final Collection<PtyMaster> runningTasks;
 
     public UndertowBootstrap(String host, int port, Main termdHandler, Collection runningTasks) {
         this.host = host;
@@ -139,8 +138,9 @@ public class UndertowBootstrap {
     private HttpHandler getProcessStatusHandler() {
         return exchange -> {
             Map<String, Object> tasksMap = runningTasks.stream().collect(Collectors.toMap(t -> String.valueOf(t.getId()), t -> t.getStatus().toString()));
-            JsonObject jsonObject = new JsonObject(tasksMap);
-            exchange.getResponseSender().send(jsonObject.toString());
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonString = mapper.writeValueAsString(tasksMap);
+            exchange.getResponseSender().send(jsonString);
         };
     }
 
@@ -149,7 +149,7 @@ public class UndertowBootstrap {
             @Override
             public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
                 WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
-                termdHandler.getBootstrap().accept(conn.getTtyConnection());
+                termdHandler.getPtyBootstrap().accept(conn);
             }
         };
 
@@ -161,7 +161,7 @@ public class UndertowBootstrap {
         WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
             @Override
             public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
-                TaskStatusUpdateListener statusUpdateListener = (statusUpdateEvent) -> {
+                Consumer<PtyStatusEvent> statusUpdateListener = (statusUpdateEvent) -> {
                     Map<String, Object> statusUpdate = new HashMap<>();
                     statusUpdate.put("action", "status-update");
                     TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
