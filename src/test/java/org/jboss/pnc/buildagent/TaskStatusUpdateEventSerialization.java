@@ -33,20 +33,20 @@ import java.io.IOException;
  */
 public class TaskStatusUpdateEventSerialization {
 
-  private static final Logger log = LoggerFactory.getLogger(TaskStatusUpdateEventSerialization.class);
+    private static final Logger log = LoggerFactory.getLogger(TaskStatusUpdateEventSerialization.class);
 
-  @Test
-  public void testTaskStatusUpdateEventSerialization() throws IOException {
-    Task task = new Task(null, null, null, "");
-    io.termd.core.http.TaskStatusUpdateEvent termTaskStatusUpdateEvent = new io.termd.core.http.TaskStatusUpdateEvent(task, Status.NEW, Status.RUNNING);
+    @Test
+    public void testTaskStatusUpdateEventSerialization() throws IOException {
+        Task task = new Task(null, null, null, "");
+        io.termd.core.http.TaskStatusUpdateEvent termTaskStatusUpdateEvent = new io.termd.core.http.TaskStatusUpdateEvent(task, Status.NEW, Status.RUNNING);
 
-    TaskStatusUpdateEvent taskStatusUpdateEvent = new TaskStatusUpdateEvent(termTaskStatusUpdateEvent);
-    String taskId = taskStatusUpdateEvent.getTaskId();
+        TaskStatusUpdateEvent taskStatusUpdateEvent = new TaskStatusUpdateEvent(termTaskStatusUpdateEvent);
+        String taskId = taskStatusUpdateEvent.getTaskId();
 
-    String serialized = taskStatusUpdateEvent.toString();
-    log.info("Serialized : {}", serialized);
-    TaskStatusUpdateEvent deserializedTaskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(serialized);
+        String serialized = taskStatusUpdateEvent.toString();
+        log.info("Serialized : {}", serialized);
+        TaskStatusUpdateEvent deserializedTaskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(serialized);
 
-    Assert.assertEquals(taskId, deserializedTaskStatusUpdateEvent.getTaskId());
-  }
+        Assert.assertEquals(taskId, deserializedTaskStatusUpdateEvent.getTaskId());
+    }
 }

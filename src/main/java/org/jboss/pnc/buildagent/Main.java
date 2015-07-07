@@ -45,122 +45,122 @@ import java.util.function.Consumer;
  */
 public class Main {
 
-  Logger log = LoggerFactory.getLogger(Main.class);
+    Logger log = LoggerFactory.getLogger(Main.class);
 
-  Bootstrap bootstrap;
+    Bootstrap bootstrap;
 
-  private final List<Task> runningTasks = new ArrayList<>();
+    private final List<Task> runningTasks = new ArrayList<>();
 
-  private final Set<TaskStatusUpdateListener> statusUpdateListeners = new HashSet<>();
-  private File logFolder = Paths.get("").toFile();
-  private Charset charset = Charset.forName("UTF-8");
-
-
-  public boolean addStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
-    return statusUpdateListeners.add(statusUpdateListener);
-  }
-
-  public boolean removeStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
-    return statusUpdateListeners.remove(statusUpdateListener);
-  }
-
-  public static void main(String[] args) throws Exception {
-    new Main().start("localhost", 8080, null);
-  }
+    private final Set<TaskStatusUpdateListener> statusUpdateListeners = new HashSet<>();
+    private File logFolder = Paths.get("").toFile();
+    private Charset charset = Charset.forName("UTF-8");
 
 
-
-  public void start(String host, int port, final Runnable onStart) throws InterruptedException {
-    bootstrap = new Bootstrap(taskCreationListener());
-
-    UndertowBootstrap undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
-
-    undertowBootstrap.bootstrap(new Consumer<Boolean>() {
-      @Override
-      public void accept(Boolean event) {
-        if (event) {
-          System.out.println("Server started on " + 8080);
-          if (onStart != null) onStart.run();
-        } else {
-          System.out.println("Could not start");
-        }
-      }
-    });
-  }
-
-  private TaskCreationListener taskCreationListener() {
-    return (task) -> {
-      try {
-        FileOutputStream fileOutputStream = registerProcessLogger(task);
-        task.setTaskStatusUpdateListener(taskStatusUpdateListener(fileOutputStream));
-        runningTasks.add(task);
-      } catch (IOException e) {
-        log.error("Cannot open fileChannel: ", e);
-      }
-    };
-  }
-
-  private TaskStatusUpdateListener taskStatusUpdateListener(FileOutputStream fileOutputStream) {
-    return (taskStatusUpdateEvent) -> {
-      Task task = taskStatusUpdateEvent.getTask();
-      Status newStatus = taskStatusUpdateEvent.getNewStatus();
-      switch (newStatus) {
-        case SUCCESSFULLY_COMPLETED:
-        case FAILED:
-        case INTERRUPTED:
-          runningTasks.remove(task);
-          try {
-            String completed = "% # Finished with status: " + newStatus + "\r\n";
-            fileOutputStream.write(completed.getBytes(charset));
-            fileOutputStream.close();
-          } catch (IOException e) {
-            log.error("Cannot close log file channel: ", e);
-          }
-      };
-      notifyStatusUpdated(taskStatusUpdateEvent);
-    };
-  }
-
-  private FileOutputStream registerProcessLogger(Task task) throws IOException {
-    File logFile = new File(logFolder, "console-" + task.getId() + ".log");
-
-    log.info("Opening log file ...");
-    FileOutputStream fileOutputStream = new FileOutputStream(logFile, true);
-
-    Consumer<String> processInputConsumer = (line) -> {
-
-      try {
-        String command = "% " + line + "\r\n";
-        fileOutputStream.write(command.getBytes(charset));
-      } catch (IOException e) {
-        log.error("Cannot write task {} output to fileChannel", task.getId());
-      }
-    };
-
-    Consumer<int[]> processOutputConsumer = (ints) -> {
-      DataOutputStream out = new DataOutputStream(fileOutputStream);
-      for (int anInt : ints) {
-        try {
-          out.write(anInt);
-        } catch (IOException e) {
-          log.error("Cannot write task {} output to fileChannel", task.getId());
-        }
-      }
-    };
-
-    task.setProcessInputConsumer(processInputConsumer);
-    task.setProcessOutputConsumer(processOutputConsumer);
-    return fileOutputStream;
-  }
-
-  void notifyStatusUpdated(TaskStatusUpdateEvent statusUpdateEvent) {
-    for (TaskStatusUpdateListener statusUpdateListener : statusUpdateListeners) {
-      log.debug("Notifying listener {} status update {}", statusUpdateListener, statusUpdateEvent);
-      statusUpdateListener.accept(statusUpdateEvent);
+    public boolean addStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
+        return statusUpdateListeners.add(statusUpdateListener);
     }
-  }
 
-  public Consumer<TtyConnection> getBootstrap() {
-    return bootstrap;
-  }
+    public boolean removeStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
+        return statusUpdateListeners.remove(statusUpdateListener);
+    }
+
+    public static void main(String[] args) throws Exception {
+        new Main().start("localhost", 8080, null);
+    }
+
+
+    public void start(String host, int port, final Runnable onStart) throws InterruptedException {
+        bootstrap = new Bootstrap(taskCreationListener());
+
+        UndertowBootstrap undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
+
+        undertowBootstrap.bootstrap(new Consumer<Boolean>() {
+            @Override
+            public void accept(Boolean event) {
+                if (event) {
+                    System.out.println("Server started on " + 8080);
+                    if (onStart != null) onStart.run();
+                } else {
+                    System.out.println("Could not start");
+                }
+            }
+        });
+    }
+
+    private TaskCreationListener taskCreationListener() {
+        return (task) -> {
+            try {
+                FileOutputStream fileOutputStream = registerProcessLogger(task);
+                task.setTaskStatusUpdateListener(taskStatusUpdateListener(fileOutputStream));
+                runningTasks.add(task);
+            } catch (IOException e) {
+                log.error("Cannot open fileChannel: ", e);
+            }
+        };
+    }
+
+    private TaskStatusUpdateListener taskStatusUpdateListener(FileOutputStream fileOutputStream) {
+        return (taskStatusUpdateEvent) -> {
+            Task task = taskStatusUpdateEvent.getTask();
+            Status newStatus = taskStatusUpdateEvent.getNewStatus();
+            switch (newStatus) {
+                case SUCCESSFULLY_COMPLETED:
+                case FAILED:
+                case INTERRUPTED:
+                    runningTasks.remove(task);
+                    try {
+                        String completed = "% # Finished with status: " + newStatus + "\r\n";
+                        fileOutputStream.write(completed.getBytes(charset));
+                        fileOutputStream.close();
+                    } catch (IOException e) {
+                        log.error("Cannot close log file channel: ", e);
+                    }
+            }
+            ;
+            notifyStatusUpdated(taskStatusUpdateEvent);
+        };
+    }
+
+    private FileOutputStream registerProcessLogger(Task task) throws IOException {
+        File logFile = new File(logFolder, "console-" + task.getId() + ".log");
+
+        log.info("Opening log file ...");
+        FileOutputStream fileOutputStream = new FileOutputStream(logFile, true);
+
+        Consumer<String> processInputConsumer = (line) -> {
+
+            try {
+                String command = "% " + line + "\r\n";
+                fileOutputStream.write(command.getBytes(charset));
+            } catch (IOException e) {
+                log.error("Cannot write task {} output to fileChannel", task.getId());
+            }
+        };
+
+        Consumer<int[]> processOutputConsumer = (ints) -> {
+            DataOutputStream out = new DataOutputStream(fileOutputStream);
+            for (int anInt : ints) {
+                try {
+                    out.write(anInt);
+                } catch (IOException e) {
+                    log.error("Cannot write task {} output to fileChannel", task.getId());
+                }
+            }
+        };
+
+        task.setProcessInputConsumer(processInputConsumer);
+        task.setProcessOutputConsumer(processOutputConsumer);
+        return fileOutputStream;
+    }
+
+    void notifyStatusUpdated(TaskStatusUpdateEvent statusUpdateEvent) {
+        for (TaskStatusUpdateListener statusUpdateListener : statusUpdateListeners) {
+            log.debug("Notifying listener {} status update {}", statusUpdateListener, statusUpdateEvent);
+            statusUpdateListener.accept(statusUpdateEvent);
+        }
+    }
+
+    public Consumer<TtyConnection> getBootstrap() {
+        return bootstrap;
+    }
 }

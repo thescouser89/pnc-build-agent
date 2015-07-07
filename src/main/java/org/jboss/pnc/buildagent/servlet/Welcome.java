@@ -30,10 +30,10 @@ import java.io.PrintWriter;
  */
 public class Welcome extends HttpServlet {
 
-  @Override
-  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-    PrintWriter out = response.getWriter();
-    out.print("Welcome to PNC Build Agent.");
-    out.close();
-  }
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        PrintWriter out = response.getWriter();
+        out.print("Welcome to PNC Build Agent.");
+        out.close();
+    }
 }

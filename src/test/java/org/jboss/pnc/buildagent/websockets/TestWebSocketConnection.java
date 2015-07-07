@@ -57,216 +57,215 @@ import java.util.stream.Collectors;
  */
 public class TestWebSocketConnection {
 
-  private static final Logger log = LoggerFactory.getLogger(TestWebSocketConnection.class);
+    private static final Logger log = LoggerFactory.getLogger(TestWebSocketConnection.class);
 
-  private static final String HOST = "localhost";
-  private static final int PORT = 8080;
-  private static final String WEB_SOCKET_TERMINAL_PATH = "/term";
-  private static final String WEB_SOCKET_LISTENER_PATH = "/process-status-updates";
-  private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.TestProcess 4";
+    private static final String HOST = "localhost";
+    private static final int PORT = 8080;
+    private static final String WEB_SOCKET_TERMINAL_PATH = "/term";
+    private static final String WEB_SOCKET_LISTENER_PATH = "/process-status-updates";
+    private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.TestProcess 4";
 
-  private File logFolder = new File("/home/matej/workspace/soa-p/pnc-build-agent/"); //TODO log folder
+    private File logFolder = new File("/home/matej/workspace/soa-p/pnc-build-agent/"); //TODO log folder
 
 
+    @BeforeClass
+    public static void setUP() throws Exception {
+        TermdServer.startServer(HOST, PORT);
+    }
 
-  @BeforeClass
-  public static void setUP() throws Exception {
-    TermdServer.startServer(HOST, PORT);
-  }
+    @AfterClass
+    public static void tearDown() {
+        TermdServer.stopServer();
+    }
 
-  @AfterClass
-  public static void tearDown() {
-    TermdServer.stopServer();
-  }
+    @Test
+    public void serverShouldBeUpAndRunning() throws Exception {
+        String content = readUrl(HOST, PORT, "/");
+        Assert.assertTrue("Cannot read response from serverThread.", content.length() > 0);
+    }
 
-  @Test
-  public void serverShouldBeUpAndRunning() throws Exception {
-    String content = readUrl(HOST, PORT, "/");
-    Assert.assertTrue("Cannot read response from serverThread.", content.length() > 0);
-  }
+    @Test
+    public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults() throws Exception {
+        String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
+        String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
 
-  @Test
-  public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults() throws Exception {
-    String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
-    String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
+        ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper = new ObjectWrapper<>(new ArrayList<>());
+        Client statusListenerClient = connectStatusListenerClient(listenerUrl, remoteResponseStatusWrapper);
 
-    ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper = new ObjectWrapper<>(new ArrayList<>());
-    Client statusListenerClient = connectStatusListenerClient(listenerUrl, remoteResponseStatusWrapper);
+        ObjectWrapper<List<String>> remoteResponseWrapper = new ObjectWrapper<>(new ArrayList<>());
+        Client commandExecutingClient = connectCommandExecutingClient(terminalUrl, remoteResponseWrapper);
 
-    ObjectWrapper<List<String>> remoteResponseWrapper = new ObjectWrapper<>(new ArrayList<>());
-    Client commandExecutingClient = connectCommandExecutingClient(terminalUrl, remoteResponseWrapper);
+        assertThatResultWasReceived(remoteResponseWrapper, 5, ChronoUnit.SECONDS);
+        assertThatCommandCompletedSuccessfully(remoteResponseStatusWrapper, 5, ChronoUnit.SECONDS);
+        assertThatLogWasWritten(remoteResponseStatusWrapper);
 
-    assertThatResultWasReceived(remoteResponseWrapper, 5, ChronoUnit.SECONDS);
-    assertThatCommandCompletedSuccessfully(remoteResponseStatusWrapper, 5, ChronoUnit.SECONDS);
-    assertThatLogWasWritten(remoteResponseStatusWrapper);
+        commandExecutingClient.close();
+        statusListenerClient.close();
+    }
 
-    commandExecutingClient.close();
-    statusListenerClient.close();
-  }
+    private Client connectCommandExecutingClient(String webSocketUrl, ObjectWrapper<List<String>> remoteResponseWrapper) {
+        ObjectWrapper<Boolean> testCommandExecuted = new ObjectWrapper<>(false);
 
-  private Client connectCommandExecutingClient(String webSocketUrl, ObjectWrapper<List<String>> remoteResponseWrapper) {
-    ObjectWrapper<Boolean> testCommandExecuted = new ObjectWrapper<>(false);
+        Client client = setUpClient();
+        Consumer<byte[]> responseConsumer = (bytes) -> {
+            String responseData = new String(bytes);
+            if ("% ".equals(responseData)) { //TODO use events
+                if (!testCommandExecuted.get()) {
+                    testCommandExecuted.set(true);
+                    executeRemoteCommand(client, TEST_COMMAND);
+                }
+            } else {
+                remoteResponseWrapper.get().add(responseData);
+            }
+        };
+        client.onBinaryMessage(responseConsumer);
 
-    Client client = setUpClient();
-    Consumer<byte[]> responseConsumer = (bytes) -> {
-      String responseData = new String(bytes);
-      if ("% ".equals(responseData)) { //TODO use events
-        if (!testCommandExecuted.get()) {
-          testCommandExecuted.set(true);
-          executeRemoteCommand(client, TEST_COMMAND);
+        client.onClose(closeReason -> {
+        });
+
+        try {
+            client.connect(webSocketUrl);
+        } catch (Exception e) {
+            throw new AssertionError("Failed to connect to remote client.", e);
         }
-      } else {
-        remoteResponseWrapper.get().add(responseData);
-      }
-    };
-    client.onBinaryMessage(responseConsumer);
-
-    client.onClose(closeReason -> {
-    });
-
-    try {
-      client.connect(webSocketUrl);
-    } catch (Exception e) {
-      throw new AssertionError("Failed to connect to remote client.", e);
-    }
-    return client;
-  }
-
-  private Client connectStatusListenerClient(String webSocketUrl, ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper) {
-    Client client = setUpClient();
-    Consumer<String> responseConsumer = (text) -> {
-      log.trace("Decoding response: {}", text);
-      JsonObject jsonObject = new JsonObject(text);
-      try {
-        TaskStatusUpdateEvent taskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(jsonObject.getField("event").toString());
-        remoteResponseStatusWrapper.get().add(taskStatusUpdateEvent);
-      } catch (IOException e) {
-        log.error("Cannot deserialize TaskStatusUpdateEvent.", e);
-      }
-    };
-    client.onStringMessage(responseConsumer);
-
-    client.onClose(closeReason -> {
-    });
-
-    try {
-      client.connect(webSocketUrl);
-    } catch (Exception e) {
-      throw new AssertionError("Failed to connect to remote client.", e);
-    }
-    return client;
-  }
-
-  private void assertThatResultWasReceived(ObjectWrapper<List<String>> remoteResponseWrapper, long timeout, TemporalUnit timeUnit) throws InterruptedException {
-    List<String> strings = remoteResponseWrapper.get();
-
-    boolean responseContainsExpectedString = false;
-    LocalDateTime stared = LocalDateTime.now();
-    while (true) {
-      List<String> stringsCopy = new ArrayList<>(strings);
-      String remoteResponses = stringsCopy.stream().collect(Collectors.joining());
-
-      if (stared.plus(timeout, timeUnit).isBefore(LocalDateTime.now())) {
-        log.info("Remote responses: {}", remoteResponses);
-        throw new AssertionError("Did not received expected response in " + timeout + " " + timeUnit);
-      }
-
-      if (remoteResponses.contains(TestProcess.WELCOME_MESSAGE)) {
-        responseContainsExpectedString = true;
-        log.info("Remote responses: {}", remoteResponses);
-        break;
-      } else {
-        Thread.sleep(200);
-      }
-    }
-    Assert.assertTrue("Response should contain output of " + TEST_COMMAND + ".", responseContainsExpectedString);
-  }
-
-  private void assertThatCommandCompletedSuccessfully(ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper, long timeout, TemporalUnit timeUnit) throws InterruptedException {
-
-    boolean responseContainsExpectedStatuses = false;
-    LocalDateTime stared = LocalDateTime.now();
-    while (true) {
-      if (stared.plus(timeout, timeUnit).isBefore(LocalDateTime.now())) {
-        log.info("Remote response status: {}", remoteResponseStatusWrapper.get());
-        throw new AssertionError("Did not received response status in " + timeout + " " + timeUnit);
-      }
-
-      List<TaskStatusUpdateEvent> receivedStatuses = remoteResponseStatusWrapper.get();
-      log.trace("Received status updates: " + receivedStatuses);
-
-      List<Status> collectedUpdates = receivedStatuses.stream().map(event -> event.getNewStatus()).collect(Collectors.toList());
-
-      if (collectedUpdates.contains(Status.RUNNING) &&
-          collectedUpdates.contains(Status.SUCCESSFULLY_COMPLETED)) {
-        responseContainsExpectedStatuses = true;
-        break;
-      } else {
-        Thread.sleep(200);
-      }
-    }
-    Assert.assertTrue("Response should contain status SUCCESS.", responseContainsExpectedStatuses);
-  }
-
-  private void assertThatLogWasWritten(ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper) throws IOException {
-    List<TaskStatusUpdateEvent> responses = remoteResponseStatusWrapper.get();
-    Optional<TaskStatusUpdateEvent> firstResponse = responses.stream().findFirst();
-    if (!firstResponse.isPresent()) {
-      throw new AssertionError("There is no status update event to retrieve task id.");
+        return client;
     }
 
-    TaskStatusUpdateEvent taskStatusUpdateEvent = firstResponse.get();
-    String taskId = taskStatusUpdateEvent.getTaskId() + "";
-    File logFile = new File(logFolder, "console-" + taskId + ".log");
-    Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
+    private Client connectStatusListenerClient(String webSocketUrl, ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper) {
+        Client client = setUpClient();
+        Consumer<String> responseConsumer = (text) -> {
+            log.trace("Decoding response: {}", text);
+            JsonObject jsonObject = new JsonObject(text);
+            try {
+                TaskStatusUpdateEvent taskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(jsonObject.getField("event").toString());
+                remoteResponseStatusWrapper.get().add(taskStatusUpdateEvent);
+            } catch (IOException e) {
+                log.error("Cannot deserialize TaskStatusUpdateEvent.", e);
+            }
+        };
+        client.onStringMessage(responseConsumer);
 
-    String fileContent = new String(Files.readAllBytes(logFile.toPath()));
-    Assert.assertTrue("Missing executed command.", fileContent.contains(TEST_COMMAND));
-    Assert.assertTrue("Missing response message.", fileContent.contains("Hello again"));
-    Assert.assertTrue("Missing ot invalid completion state.", fileContent.contains("# Finished with status: SUCCESSFULLY_COMPLETED"));
-  }
+        client.onClose(closeReason -> {
+        });
 
-  private void executeRemoteCommand(Client client, String command) {
-    log.info("Executing remote command ...");
-    RemoteEndpoint.Basic remoteEndpoint = client.getRemoteEndpoint();
-    String data = "{\"action\":\"read\",\"data\":\"" + command + "\\r\\n\"}";
-    try {
-      remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
-    } catch (IOException e) {
-      e.printStackTrace();
+        try {
+            client.connect(webSocketUrl);
+        } catch (Exception e) {
+            throw new AssertionError("Failed to connect to remote client.", e);
+        }
+        return client;
     }
-  }
 
-  private Client setUpClient() {
-    Client client = new Client();
+    private void assertThatResultWasReceived(ObjectWrapper<List<String>> remoteResponseWrapper, long timeout, TemporalUnit timeUnit) throws InterruptedException {
+        List<String> strings = remoteResponseWrapper.get();
 
-    Consumer<Session> onOpen = (session) -> {
-      log.info("Client connection opened.");
-    };
+        boolean responseContainsExpectedString = false;
+        LocalDateTime stared = LocalDateTime.now();
+        while (true) {
+            List<String> stringsCopy = new ArrayList<>(strings);
+            String remoteResponses = stringsCopy.stream().collect(Collectors.joining());
 
-    Consumer<CloseReason> onClose = (closeReason) -> {
-      log.info("Client connection closed. " + closeReason);
-    };
+            if (stared.plus(timeout, timeUnit).isBefore(LocalDateTime.now())) {
+                log.info("Remote responses: {}", remoteResponses);
+                throw new AssertionError("Did not received expected response in " + timeout + " " + timeUnit);
+            }
 
-    client.onOpen(onOpen);
-    client.onClose(onClose);
-
-    return client;
-  }
-
-  private String readUrl(String host, int port, String path) throws IOException {
-    URL url = new URL("http://" + host + ":" + port + path);
-    URLConnection connection = url.openConnection();
-    connection.connect();
-    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-
-    String inputLine;
-    StringBuilder stringBuilder = new StringBuilder();
-    while ((inputLine = bufferedReader.readLine()) != null) {
-      stringBuilder.append(inputLine);
+            if (remoteResponses.contains(TestProcess.WELCOME_MESSAGE)) {
+                responseContainsExpectedString = true;
+                log.info("Remote responses: {}", remoteResponses);
+                break;
+            } else {
+                Thread.sleep(200);
+            }
+        }
+        Assert.assertTrue("Response should contain output of " + TEST_COMMAND + ".", responseContainsExpectedString);
     }
-    bufferedReader.close();
-    return stringBuilder.toString();
-  }
+
+    private void assertThatCommandCompletedSuccessfully(ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper, long timeout, TemporalUnit timeUnit) throws InterruptedException {
+
+        boolean responseContainsExpectedStatuses = false;
+        LocalDateTime stared = LocalDateTime.now();
+        while (true) {
+            if (stared.plus(timeout, timeUnit).isBefore(LocalDateTime.now())) {
+                log.info("Remote response status: {}", remoteResponseStatusWrapper.get());
+                throw new AssertionError("Did not received response status in " + timeout + " " + timeUnit);
+            }
+
+            List<TaskStatusUpdateEvent> receivedStatuses = remoteResponseStatusWrapper.get();
+            log.trace("Received status updates: " + receivedStatuses);
+
+            List<Status> collectedUpdates = receivedStatuses.stream().map(event -> event.getNewStatus()).collect(Collectors.toList());
+
+            if (collectedUpdates.contains(Status.RUNNING) &&
+                    collectedUpdates.contains(Status.SUCCESSFULLY_COMPLETED)) {
+                responseContainsExpectedStatuses = true;
+                break;
+            } else {
+                Thread.sleep(200);
+            }
+        }
+        Assert.assertTrue("Response should contain status SUCCESS.", responseContainsExpectedStatuses);
+    }
+
+    private void assertThatLogWasWritten(ObjectWrapper<List<TaskStatusUpdateEvent>> remoteResponseStatusWrapper) throws IOException {
+        List<TaskStatusUpdateEvent> responses = remoteResponseStatusWrapper.get();
+        Optional<TaskStatusUpdateEvent> firstResponse = responses.stream().findFirst();
+        if (!firstResponse.isPresent()) {
+            throw new AssertionError("There is no status update event to retrieve task id.");
+        }
+
+        TaskStatusUpdateEvent taskStatusUpdateEvent = firstResponse.get();
+        String taskId = taskStatusUpdateEvent.getTaskId() + "";
+        File logFile = new File(logFolder, "console-" + taskId + ".log");
+        Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
+
+        String fileContent = new String(Files.readAllBytes(logFile.toPath()));
+        Assert.assertTrue("Missing executed command.", fileContent.contains(TEST_COMMAND));
+        Assert.assertTrue("Missing response message.", fileContent.contains("Hello again"));
+        Assert.assertTrue("Missing ot invalid completion state.", fileContent.contains("# Finished with status: SUCCESSFULLY_COMPLETED"));
+    }
+
+    private void executeRemoteCommand(Client client, String command) {
+        log.info("Executing remote command ...");
+        RemoteEndpoint.Basic remoteEndpoint = client.getRemoteEndpoint();
+        String data = "{\"action\":\"read\",\"data\":\"" + command + "\\r\\n\"}";
+        try {
+            remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Client setUpClient() {
+        Client client = new Client();
+
+        Consumer<Session> onOpen = (session) -> {
+            log.info("Client connection opened.");
+        };
+
+        Consumer<CloseReason> onClose = (closeReason) -> {
+            log.info("Client connection closed. " + closeReason);
+        };
+
+        client.onOpen(onOpen);
+        client.onClose(onClose);
+
+        return client;
+    }
+
+    private String readUrl(String host, int port, String path) throws IOException {
+        URL url = new URL("http://" + host + ":" + port + path);
+        URLConnection connection = url.openConnection();
+        connection.connect();
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+
+        String inputLine;
+        StringBuilder stringBuilder = new StringBuilder();
+        while ((inputLine = bufferedReader.readLine()) != null) {
+            stringBuilder.append(inputLine);
+        }
+        bufferedReader.close();
+        return stringBuilder.toString();
+    }
 
 }

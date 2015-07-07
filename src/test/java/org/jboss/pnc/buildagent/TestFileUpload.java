@@ -38,50 +38,50 @@ import java.util.Scanner;
  */
 public class TestFileUpload {
 
-  private static final String HOST = "localhost";
-  private static final int PORT = 8080;
+    private static final String HOST = "localhost";
+    private static final int PORT = 8080;
 
-  private static Logger log = LoggerFactory.getLogger(TestFileUpload.class);
+    private static Logger log = LoggerFactory.getLogger(TestFileUpload.class);
 
-  @BeforeClass
-  public static void setUP() throws Exception {
-    TermdServer.startServer(HOST, PORT);
-  }
-
-  @AfterClass
-  public static void tearDown() {
-    TermdServer.stopServer();
-  }
-
-  @Test
-  public void uploadFile() throws Exception {
-    Path pwd = Paths.get("").toAbsolutePath();
-    Path fileUploadPath = Paths.get(pwd.toString(), "/test-upload.txt");
-    URL url = new URL("http://" + HOST + ":" + PORT + "/upload" + fileUploadPath);
-    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-    connection.setRequestMethod("PUT");
-
-    connection.setDoOutput(true);
-    connection.setDoInput(true);
-
-    String fileContent = "The quick brown fox jumps over the lazy dog.";
-    byte[] fileContentBytes = fileContent.getBytes();
-    connection.setRequestProperty("Content-Length", "" + Integer.toString(fileContentBytes.length));
-
-    try (OutputStream outputStream = connection.getOutputStream()) {
-      outputStream.write(fileContentBytes);
+    @BeforeClass
+    public static void setUP() throws Exception {
+        TermdServer.startServer(HOST, PORT);
     }
 
-    Assert.assertEquals(connection.getResponseMessage() , 200, connection.getResponseCode());
+    @AfterClass
+    public static void tearDown() {
+        TermdServer.stopServer();
+    }
 
-    assertFileWasUploaded(fileUploadPath, fileContent);
+    @Test
+    public void uploadFile() throws Exception {
+        Path pwd = Paths.get("").toAbsolutePath();
+        Path fileUploadPath = Paths.get(pwd.toString(), "/test-upload.txt");
+        URL url = new URL("http://" + HOST + ":" + PORT + "/upload" + fileUploadPath);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("PUT");
 
-    fileUploadPath.toFile().delete();
-  }
+        connection.setDoOutput(true);
+        connection.setDoInput(true);
 
-  private void assertFileWasUploaded(Path fileUploadPath, String expectedFileContent) throws FileNotFoundException {
-    String actualFileContent = new Scanner(fileUploadPath.toFile()).useDelimiter("\\Z").next();
-    log.info("Content written to file: {}", actualFileContent);
-    Assert.assertEquals(expectedFileContent, actualFileContent);
-  }
+        String fileContent = "The quick brown fox jumps over the lazy dog.";
+        byte[] fileContentBytes = fileContent.getBytes();
+        connection.setRequestProperty("Content-Length", "" + Integer.toString(fileContentBytes.length));
+
+        try (OutputStream outputStream = connection.getOutputStream()) {
+            outputStream.write(fileContentBytes);
+        }
+
+        Assert.assertEquals(connection.getResponseMessage(), 200, connection.getResponseCode());
+
+        assertFileWasUploaded(fileUploadPath, fileContent);
+
+        fileUploadPath.toFile().delete();
+    }
+
+    private void assertFileWasUploaded(Path fileUploadPath, String expectedFileContent) throws FileNotFoundException {
+        String actualFileContent = new Scanner(fileUploadPath.toFile()).useDelimiter("\\Z").next();
+        log.info("Content written to file: {}", actualFileContent);
+        Assert.assertEquals(expectedFileContent, actualFileContent);
+    }
 }

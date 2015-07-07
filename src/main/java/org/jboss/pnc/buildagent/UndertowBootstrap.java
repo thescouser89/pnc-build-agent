@@ -61,146 +61,126 @@ import static io.undertow.servlet.Servlets.servlet;
  */
 public class UndertowBootstrap {
 
-  Logger log = LoggerFactory.getLogger(UndertowBootstrap.class);
+    Logger log = LoggerFactory.getLogger(UndertowBootstrap.class);
 
-  final String host;
-  final int port;
-  final Main termdHandler;
-  private final Executor executor = Executors.newFixedThreadPool(1);
-  private final Collection<Task> runningTasks;
+    final String host;
+    final int port;
+    final Main termdHandler;
+    private final Executor executor = Executors.newFixedThreadPool(1);
+    private final Collection<Task> runningTasks;
 
-  public UndertowBootstrap(String host, int port, Main termdHandler, Collection runningTasks) {
-    this.host = host;
-    this.port = port;
-    this.termdHandler = termdHandler;
-    this.runningTasks = runningTasks;
-  }
-
-  public void bootstrap(final Consumer<Boolean> completionHandler) {
-
-    String servletPath = "/";
-    String socketPath = "/socket";
-
-    DeploymentInfo servletBuilder = deployment()
-        .setClassLoader(UndertowBootstrap.class.getClassLoader())
-        .setContextPath(servletPath)
-        .setDeploymentName("ROOT.war")
-        .addServlets(
-            servlet("WelcomeServlet", Welcome.class)
-                .addMapping("/")
-                .addMapping("/index"),
-            servlet("UploaderServlet", Upload.class)
-                .addMapping("/upload/*"),
-            servlet("DownloaderServlet", Download.class)
-                .addMapping("/download/*"));
-
-    DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
-    manager.deploy();
-
-    HttpHandler servletHandler = null;
-    try {
-      servletHandler = manager.start();
-    } catch (ServletException e) {
-      e.printStackTrace();//TODO handle exception
+    public UndertowBootstrap(String host, int port, Main termdHandler, Collection runningTasks) {
+        this.host = host;
+        this.port = port;
+        this.termdHandler = termdHandler;
+        this.runningTasks = runningTasks;
     }
 
-    PathHandler pathHandler = Handlers.path(Handlers.redirect(servletPath))
-        .addPrefixPath(servletPath, servletHandler)
-        .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleRequest(exchange));
+    public void bootstrap(final Consumer<Boolean> completionHandler) {
 
-    Undertow undertow = Undertow.builder()
-      .addHttpListener(port, host)
-      .setHandler(pathHandler)
-      .build();
+        String servletPath = "/";
+        String socketPath = "/socket";
 
-    undertow.start();
+        DeploymentInfo servletBuilder = deployment()
+                .setClassLoader(UndertowBootstrap.class.getClassLoader())
+                .setContextPath(servletPath)
+                .setDeploymentName("ROOT.war")
+                .addServlets(
+                        servlet("WelcomeServlet", Welcome.class)
+                                .addMapping("/")
+                                .addMapping("/index"),
+                        servlet("UploaderServlet", Upload.class)
+                                .addMapping("/upload/*"),
+                        servlet("DownloaderServlet", Download.class)
+                                .addMapping("/download/*"));
 
-    completionHandler.accept(true);
-  }
+        DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
+        manager.deploy();
 
-  private void handleRequest(HttpServerExchange exchange) throws Exception {
-    String requestPath = exchange.getRequestPath();
-    Sender responseSender = exchange.getResponseSender();
+        HttpHandler servletHandler = null;
+        try {
+            servletHandler = manager.start();
+        } catch (ServletException e) {
+            e.printStackTrace();//TODO handle exception
+        }
 
-    if (requestPath.equals("/term")) {
-      getWebSocketHandler().handleRequest(exchange);
-      return;
+        PathHandler pathHandler = Handlers.path(Handlers.redirect(servletPath))
+                .addPrefixPath(servletPath, servletHandler)
+                .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleRequest(exchange));
+
+        Undertow undertow = Undertow.builder()
+                .addHttpListener(port, host)
+                .setHandler(pathHandler)
+                .build();
+
+        undertow.start();
+
+        completionHandler.accept(true);
     }
-    if (requestPath.equals("/process-status-updates")) {
-      webSocketStatusUpdateHandler().handleRequest(exchange);
-      return;
+
+    private void handleRequest(HttpServerExchange exchange) throws Exception {
+        String requestPath = exchange.getRequestPath();
+        Sender responseSender = exchange.getResponseSender();
+
+        if (requestPath.equals("/term")) {
+            getWebSocketHandler().handleRequest(exchange);
+            return;
+        }
+        if (requestPath.equals("/process-status-updates")) {
+            webSocketStatusUpdateHandler().handleRequest(exchange);
+            return;
+        }
+        if (requestPath.equals("/processes")) {
+            getProcessStatusHandler().handleRequest(exchange);
+            return;
+        }
     }
-    if (requestPath.equals("/processes")) {
-      getProcessStatusHandler().handleRequest(exchange);
-      return;
-    }
 
-    if (requestPath.startsWith("/upload/")) {
-      getFileUploadHandler().handleRequest(exchange);
-      return;
-    }
-
-//    try {
-//      String resourcePath = "io/termd/core/http" + requestPath; //TODO static file server
-//      String content = readResource(resourcePath, this.getClass().getClassLoader());
-//      responseSender.send(content);
-//    } catch (Exception e) {
-//      e.printStackTrace();
-//      exchange.setResponseCode(404);
-//    } finally {
-//      responseSender.close();
-//    }
-  }
-
-  private HttpHandler getFileUploadHandler() {
-    return null;
-  }
-
-  private HttpHandler getProcessStatusHandler() {
-    return exchange -> {
-      Map<String, Object> tasksMap = runningTasks.stream().collect(Collectors.toMap(t -> String.valueOf(t.getId()), t -> t.getStatus().toString()));
-      JsonObject jsonObject = new JsonObject(tasksMap);
-      exchange.getResponseSender().send(jsonObject.toString());
-    };
-  }
-
-  private HttpHandler getWebSocketHandler() {
-    WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
-      @Override
-      public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
-        WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
-        termdHandler.getBootstrap().accept(conn.getTtyConnection());
-      }
-    };
-
-    HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
-    return webSocketHandshakeHandler;
-  }
-
-  private HttpHandler webSocketStatusUpdateHandler() {
-    WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
-      @Override
-      public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
-        TaskStatusUpdateListener statusUpdateListener = (statusUpdateEvent) -> {
-          Map<String, Object> statusUpdate = new HashMap<>();
-          statusUpdate.put("action", "status-update");
-          TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
-          statusUpdate.put("event", taskStatusUpdateEventWrapper);
-
-          ObjectMapper objectMapper = new ObjectMapper();
-          try {
-            WebSockets.sendText(objectMapper.writeValueAsString(statusUpdate), webSocketChannel, null);
-          } catch (JsonProcessingException e) {
-            e.printStackTrace();//TODO
-          }
+    private HttpHandler getProcessStatusHandler() {
+        return exchange -> {
+            Map<String, Object> tasksMap = runningTasks.stream().collect(Collectors.toMap(t -> String.valueOf(t.getId()), t -> t.getStatus().toString()));
+            JsonObject jsonObject = new JsonObject(tasksMap);
+            exchange.getResponseSender().send(jsonObject.toString());
         };
-        log.debug("Registering new status update listener {}.", statusUpdateListener);
-        termdHandler.addStatusUpdateListener(statusUpdateListener);
-        webSocketChannel.addCloseTask((task) -> termdHandler.removeStatusUpdateListener(statusUpdateListener));
-      }
-    };
+    }
 
-    HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
-    return webSocketHandshakeHandler;
-  }
+    private HttpHandler getWebSocketHandler() {
+        WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
+            @Override
+            public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
+                WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
+                termdHandler.getBootstrap().accept(conn.getTtyConnection());
+            }
+        };
+
+        HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
+        return webSocketHandshakeHandler;
+    }
+
+    private HttpHandler webSocketStatusUpdateHandler() {
+        WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
+            @Override
+            public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
+                TaskStatusUpdateListener statusUpdateListener = (statusUpdateEvent) -> {
+                    Map<String, Object> statusUpdate = new HashMap<>();
+                    statusUpdate.put("action", "status-update");
+                    TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
+                    statusUpdate.put("event", taskStatusUpdateEventWrapper);
+
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    try {
+                        WebSockets.sendText(objectMapper.writeValueAsString(statusUpdate), webSocketChannel, null);
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();//TODO
+                    }
+                };
+                log.debug("Registering new status update listener {}.", statusUpdateListener);
+                termdHandler.addStatusUpdateListener(statusUpdateListener);
+                webSocketChannel.addCloseTask((task) -> termdHandler.removeStatusUpdateListener(statusUpdateListener));
+            }
+        };
+
+        HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
+        return webSocketHandshakeHandler;
+    }
 }

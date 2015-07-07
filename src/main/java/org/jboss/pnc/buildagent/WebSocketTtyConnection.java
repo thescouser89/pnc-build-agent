@@ -38,46 +38,46 @@ import java.util.function.Consumer;
  */
 public class WebSocketTtyConnection {
 
-  private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
+    private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
 
-  private final TtyConnectionBridge ttyConnection;
+    private final TtyConnectionBridge ttyConnection;
 
-  /**
-   * @param webSocketChannel
-   * @param executor
-   */
-  public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor) {
-    Consumer<byte[]> onByteHandler = (bytes) -> {
-      WebSockets.sendBinary(ByteBuffer.wrap(bytes), webSocketChannel, null);
-    };
-    ttyConnection = new TtyConnectionBridge(onByteHandler, executor);
+    /**
+     * @param webSocketChannel
+     * @param executor
+     */
+    public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor) {
+        Consumer<byte[]> onByteHandler = (bytes) -> {
+            WebSockets.sendBinary(ByteBuffer.wrap(bytes), webSocketChannel, null);
+        };
+        ttyConnection = new TtyConnectionBridge(onByteHandler, executor);
 
-    registerWebSocketChannelListener(webSocketChannel);
-    webSocketChannel.resumeReceives();
-  }
+        registerWebSocketChannelListener(webSocketChannel);
+        webSocketChannel.resumeReceives();
+    }
 
-  private void registerWebSocketChannelListener(WebSocketChannel webSocketChannel) {
-    ChannelListener<WebSocketChannel> listener = new AbstractReceiveListener() {
+    private void registerWebSocketChannelListener(WebSocketChannel webSocketChannel) {
+        ChannelListener<WebSocketChannel> listener = new AbstractReceiveListener() {
 
-      @Override
-      protected void onFullBinaryMessage(WebSocketChannel channel, BufferedBinaryMessage message) throws IOException {
-        log.trace("Server received full binary message");
-        Pooled<ByteBuffer[]> pulledData = message.getData();
-        try {
-          ByteBuffer[] resource = pulledData.getResource();
-          ByteBuffer byteBuffer = WebSockets.mergeBuffers(resource);
-          String msg = new String(byteBuffer.array());
-          log.trace("Sending message to decoder: {}", msg);
-          ttyConnection.writeToDecoder(msg);
-        } finally {
-          pulledData.discard();
-        }
-      }
-    };
-    webSocketChannel.getReceiveSetter().set(listener);
-  }
+            @Override
+            protected void onFullBinaryMessage(WebSocketChannel channel, BufferedBinaryMessage message) throws IOException {
+                log.trace("Server received full binary message");
+                Pooled<ByteBuffer[]> pulledData = message.getData();
+                try {
+                    ByteBuffer[] resource = pulledData.getResource();
+                    ByteBuffer byteBuffer = WebSockets.mergeBuffers(resource);
+                    String msg = new String(byteBuffer.array());
+                    log.trace("Sending message to decoder: {}", msg);
+                    ttyConnection.writeToDecoder(msg);
+                } finally {
+                    pulledData.discard();
+                }
+            }
+        };
+        webSocketChannel.getReceiveSetter().set(listener);
+    }
 
-  public TtyConnectionBridge getTtyConnection() {
-    return ttyConnection;
-  }
+    public TtyConnectionBridge getTtyConnection() {
+        return ttyConnection;
+    }
 }
