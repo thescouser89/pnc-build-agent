@@ -18,11 +18,45 @@
 
 package org.jboss.pnc.buildagent.servlet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.servlet.ServletException;
+import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public class Download extends HttpServlet {
-  //TODO implement me
+
+    private static Logger log = LoggerFactory.getLogger(Download.class);
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String fileLocation = request.getPathInfo();
+        File file = new File(fileLocation);
+        if (file.isDirectory() || !file.exists()) {
+            response.sendError(500);
+            log.warn("Invalid file path {}", file);
+        }
+
+        response.setContentLength((int)file.length());
+
+        try (ServletOutputStream outputStream = response.getOutputStream()) {
+            try (FileInputStream fileInputStream = new FileInputStream(file)) {
+                byte[] bytes = new byte[1024];
+                int read;
+                while ((read = fileInputStream.read(bytes)) != -1) {
+                    outputStream.write(bytes, 0, read);
+                }
+            }
+        }
+    }
+
 }

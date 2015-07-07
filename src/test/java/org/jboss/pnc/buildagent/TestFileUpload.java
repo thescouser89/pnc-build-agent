@@ -81,7 +81,7 @@ public class TestFileUpload {
 
   private void assertFileWasUploaded(Path fileUploadPath, String expectedFileContent) throws FileNotFoundException {
     String actualFileContent = new Scanner(fileUploadPath.toFile()).useDelimiter("\\Z").next();
-    log.info("Content written to file:" + actualFileContent);
+    log.info("Content written to file: {}", actualFileContent);
     Assert.assertEquals(expectedFileContent, actualFileContent);
   }
 }
