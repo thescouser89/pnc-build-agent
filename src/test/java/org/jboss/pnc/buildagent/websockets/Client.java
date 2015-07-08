@@ -18,6 +18,10 @@
 
 package org.jboss.pnc.buildagent.websockets;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +33,9 @@ import javax.websocket.EndpointConfig;
 import javax.websocket.MessageHandler;
 import javax.websocket.RemoteEndpoint;
 import javax.websocket.Session;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
@@ -40,7 +46,10 @@ import java.util.function.Consumer;
  */
 public class Client {
 
-    private static Logger log = LoggerFactory.getLogger(Client.class);
+    public static final String WEB_SOCKET_TERMINAL_PATH = "/socket/term";
+    public static final String WEB_SOCKET_LISTENER_PATH = "/socket/process-status-updates";
+
+    private static final Logger log = LoggerFactory.getLogger(Client.class);
 
     ProgramaticClientEndpoint endpoint = new ProgramaticClientEndpoint();
     private Consumer<Session> onOpenConsumer;
@@ -134,4 +143,92 @@ public class Client {
         }
     }
 
+    public static Client initializeDefault() {
+        Client client = new Client();
+
+        Consumer<Session> onOpen = (session) -> {
+            log.info("Client connection opened.");
+        };
+
+        Consumer<CloseReason> onClose = (closeReason) -> {
+            log.info("Client connection closed. " + closeReason);
+        };
+
+        client.onOpen(onOpen);
+        client.onClose(onClose);
+
+        return client;
+    }
+
+
+    public static Client connectStatusListenerClient(String webSocketUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate) {
+        Client client = Client.initializeDefault();
+        Consumer<String> responseConsumer = (text) -> {
+            log.trace("Decoding response: {}", text);
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode jsonObject = null;
+            try {
+                jsonObject = mapper.readTree(text);
+            } catch (IOException e) {
+                log.error( "Cannot read JSON string: " + text, e);
+            }
+            try {
+                TaskStatusUpdateEvent taskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(jsonObject.get("event").toString());
+                onStatusUpdate.accept(taskStatusUpdateEvent);
+            } catch (IOException e) {
+                log.error("Cannot deserialize TaskStatusUpdateEvent.", e);
+            }
+        };
+        client.onStringMessage(responseConsumer);
+
+        client.onClose(closeReason -> {
+        });
+
+        try {
+            client.connect(webSocketUrl);
+        } catch (Exception e) {
+            throw new AssertionError("Failed to connect to remote client.", e);
+        }
+        return client;
+    }
+
+    public static Client connectCommandExecutingClient(String webSocketUrl, String command, Consumer<String> onResponseData) {
+        ObjectWrapper<Boolean> testCommandExecuted = new ObjectWrapper<>(false);
+
+        Client client = Client.initializeDefault();
+        Consumer<byte[]> responseConsumer = (bytes) -> {
+            String responseData = new String(bytes);
+            if ("% ".equals(responseData)) { //TODO use events
+                if (!testCommandExecuted.get()) {
+                    testCommandExecuted.set(true);
+                    executeRemoteCommand(client, command);
+                }
+            } else {
+                onResponseData.accept(responseData);
+            }
+        };
+        client.onBinaryMessage(responseConsumer);
+
+        client.onClose(closeReason -> {
+        });
+
+        try {
+            client.connect(webSocketUrl);
+        } catch (Exception e) {
+            throw new AssertionError("Failed to connect to remote client.", e);
+        }
+        return client;
+    }
+
+    private static void executeRemoteCommand(Client client, String command) {
+        log.info("Executing remote command ...");
+        RemoteEndpoint.Basic remoteEndpoint = client.getRemoteEndpoint();
+        String data = "{\"action\":\"read\",\"data\":\"" + command + "\\r\\n\"}";
+        try {
+            remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }

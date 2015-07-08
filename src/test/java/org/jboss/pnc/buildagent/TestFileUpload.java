@@ -57,7 +57,7 @@ public class TestFileUpload {
     public void uploadFile() throws Exception {
         Path pwd = Paths.get("").toAbsolutePath();
         Path fileUploadPath = Paths.get(pwd.toString(), "/test-upload.txt");
-        URL url = new URL("http://" + HOST + ":" + PORT + "/upload" + fileUploadPath);
+        URL url = new URL("http://" + HOST + ":" + PORT + "/servlet/upload" + fileUploadPath);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("PUT");
 

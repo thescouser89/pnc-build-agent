@@ -63,7 +63,7 @@ public class TestFileDownload {
             out.write(fileContent);
         }
 
-        URL url = new URL("http://" + HOST + ":" + PORT + "/download" + filePath);
+        URL url = new URL("http://" + HOST + ":" + PORT + "/servlet/download" + filePath);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
 

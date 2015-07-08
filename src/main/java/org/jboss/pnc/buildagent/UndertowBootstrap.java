@@ -24,7 +24,6 @@ import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.PtyStatusEvent;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
-import io.undertow.io.Sender;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.PathHandler;
@@ -76,8 +75,9 @@ public class UndertowBootstrap {
 
     public void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
 
-        String servletPath = "/";
+        String servletPath = "/servlet";
         String socketPath = "/socket";
+        String httpPath = "/";
 
         DeploymentInfo servletBuilder = deployment()
                 .setClassLoader(UndertowBootstrap.class.getClassLoader())
@@ -86,7 +86,7 @@ public class UndertowBootstrap {
                 .addServlets(
                         servlet("WelcomeServlet", Welcome.class)
                                 .addMapping("/")
-                                .addMapping("/index"),
+                                .addMapping("/index*"),
                         servlet("UploaderServlet", Upload.class)
                                 .addMapping("/upload/*"),
                         servlet("DownloaderServlet", Download.class)
@@ -104,7 +104,8 @@ public class UndertowBootstrap {
 
         PathHandler pathHandler = Handlers.path(Handlers.redirect(servletPath))
                 .addPrefixPath(servletPath, servletHandler)
-                .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleRequest(exchange));
+                .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleWebSocketRequests(exchange))
+                .addPrefixPath(httpPath, exchange -> UndertowBootstrap.this.handleHttpRequests(exchange));
 
         Undertow undertow = Undertow.builder()
                 .addHttpListener(port, host)
@@ -116,9 +117,8 @@ public class UndertowBootstrap {
         completionHandler.accept(true);
     }
 
-    private void handleRequest(HttpServerExchange exchange) throws Exception {
+    private void handleWebSocketRequests(HttpServerExchange exchange) throws Exception {
         String requestPath = exchange.getRequestPath();
-        Sender responseSender = exchange.getResponseSender();
 
         if (requestPath.equals("/socket/term")) {
             getWebSocketHandler().handleRequest(exchange);
@@ -126,6 +126,14 @@ public class UndertowBootstrap {
         }
         if (requestPath.equals("/socket/process-status-updates")) {
             webSocketStatusUpdateHandler().handleRequest(exchange);
+            return;
+        }
+    }
+
+    private void handleHttpRequests(HttpServerExchange exchange) throws Exception {
+        String requestPath = exchange.getRequestPath();
+        if (requestPath.equals("/")) {
+            exchange.getResponseSender().send("Welcome to PNC Build Agent!");
             return;
         }
         if (requestPath.equals("/processes")) {
