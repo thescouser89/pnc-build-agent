@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class TermdServer {
 
-    private static final AtomicInteger port_pool = new AtomicInteger(8080);
+    private static final AtomicInteger port_pool = new AtomicInteger(8090);
 
     private static Thread serverThread;
 
