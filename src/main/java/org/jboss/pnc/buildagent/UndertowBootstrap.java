@@ -32,9 +32,8 @@ import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
-import io.undertow.websockets.core.WebSocketChannel;
+import io.undertow.websockets.core.CloseMessage;
 import io.undertow.websockets.core.WebSockets;
-import io.undertow.websockets.spi.WebSocketHttpExchange;
 import org.jboss.pnc.buildagent.servlet.Download;
 import org.jboss.pnc.buildagent.servlet.Upload;
 import org.jboss.pnc.buildagent.servlet.Welcome;
@@ -75,7 +74,7 @@ public class UndertowBootstrap {
         this.runningTasks = runningTasks;
     }
 
-    public void bootstrap(final Consumer<Boolean> completionHandler) {
+    public void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
 
         String servletPath = "/";
         String socketPath = "/socket";
@@ -100,7 +99,7 @@ public class UndertowBootstrap {
         try {
             servletHandler = manager.start();
         } catch (ServletException e) {
-            e.printStackTrace();//TODO handle exception
+            throw new BuildAgentException("Cannot deploy servlets.", e);
         }
 
         PathHandler pathHandler = Handlers.path(Handlers.redirect(servletPath))
@@ -145,12 +144,9 @@ public class UndertowBootstrap {
     }
 
     private HttpHandler getWebSocketHandler() {
-        WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
-            @Override
-            public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
-                WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
-                termdHandler.getPtyBootstrap().accept(conn);
-            }
+        WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
+            WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
+            termdHandler.getPtyBootstrap().accept(conn);
         };
 
         HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
@@ -158,26 +154,26 @@ public class UndertowBootstrap {
     }
 
     private HttpHandler webSocketStatusUpdateHandler() {
-        WebSocketConnectionCallback webSocketConnectionCallback = new WebSocketConnectionCallback() {
-            @Override
-            public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel webSocketChannel) {
-                Consumer<PtyStatusEvent> statusUpdateListener = (statusUpdateEvent) -> {
-                    Map<String, Object> statusUpdate = new HashMap<>();
-                    statusUpdate.put("action", "status-update");
-                    TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
-                    statusUpdate.put("event", taskStatusUpdateEventWrapper);
+        WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
+            Consumer<PtyStatusEvent> statusUpdateListener = (statusUpdateEvent) -> {
+                Map<String, Object> statusUpdate = new HashMap<>();
+                statusUpdate.put("action", "status-update");
+                TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
+                statusUpdate.put("event", taskStatusUpdateEventWrapper);
 
-                    ObjectMapper objectMapper = new ObjectMapper();
-                    try {
-                        WebSockets.sendText(objectMapper.writeValueAsString(statusUpdate), webSocketChannel, null);
-                    } catch (JsonProcessingException e) {
-                        e.printStackTrace();//TODO
-                    }
-                };
-                log.debug("Registering new status update listener {}.", statusUpdateListener);
-                termdHandler.addStatusUpdateListener(statusUpdateListener);
-                webSocketChannel.addCloseTask((task) -> termdHandler.removeStatusUpdateListener(statusUpdateListener));
-            }
+                ObjectMapper objectMapper = new ObjectMapper();
+                try {
+                    String message = objectMapper.writeValueAsString(statusUpdate);
+                    WebSockets.sendText(message, webSocketChannel, null);
+                } catch (JsonProcessingException e) {
+                    log.error("Cannot write object to JSON", e);
+                    String errorMessage = "Cannot write object to JSON: " + e.getMessage();
+                    WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
+                }
+            };
+            log.debug("Registering new status update listener {}.", statusUpdateListener);
+            termdHandler.addStatusUpdateListener(statusUpdateListener);
+            webSocketChannel.addCloseTask((task) -> termdHandler.removeStatusUpdateListener(statusUpdateListener));
         };
 
         HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);

@@ -46,12 +46,6 @@
 
     <!-- Test dependencies -->
     <dependency>
-      <groupId>org.jboss.pnc</groupId>
-      <artifactId>common</artifactId>
-      <version>0.5-SNAPSHOT</version> <!-- TODO -->
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>${version.junit}</version>

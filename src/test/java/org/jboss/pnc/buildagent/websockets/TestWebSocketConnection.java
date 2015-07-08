@@ -22,9 +22,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.TermdServer;
-import org.jboss.pnc.buildagent.TestProcess;
+import org.jboss.pnc.buildagent.MockProcess;
 import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
-import org.jboss.pnc.common.util.ObjectWrapper;
+import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -65,7 +65,7 @@ public class TestWebSocketConnection {
     private static final int PORT = TermdServer.getNextPort();
     private static final String WEB_SOCKET_TERMINAL_PATH = "/socket/term";
     private static final String WEB_SOCKET_LISTENER_PATH = "/socket/process-status-updates";
-    private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.TestProcess 4";
+    private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 4";
 
     private File logFolder = Paths.get("").toAbsolutePath().toFile();
 
@@ -142,7 +142,7 @@ public class TestWebSocketConnection {
             try {
                 jsonObject = mapper.readTree(text);
             } catch (IOException e) {
-                e.printStackTrace(); //TODO
+                log.error( "Cannot read JSON string: " + text, e);
             }
             try {
                 TaskStatusUpdateEvent taskStatusUpdateEvent = TaskStatusUpdateEvent.fromJson(jsonObject.get("event").toString());
@@ -178,7 +178,7 @@ public class TestWebSocketConnection {
                 throw new AssertionError("Did not received expected response in " + timeout + " " + timeUnit);
             }
 
-            if (remoteResponses.contains(TestProcess.WELCOME_MESSAGE)) {
+            if (remoteResponses.contains(MockProcess.WELCOME_MESSAGE)) {
                 responseContainsExpectedString = true;
                 log.info("Remote responses: {}", remoteResponses);
                 break;

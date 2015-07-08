@@ -67,7 +67,7 @@ public class Main {
     }
 
 
-    public void start(String host, int port, final Runnable onStart) throws InterruptedException {
+    public void start(String host, int port, final Runnable onStart) throws InterruptedException, BuildAgentException {
         ptyBootstrap = new PtyBootstrap(taskCreationListener());
 
         UndertowBootstrap undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);

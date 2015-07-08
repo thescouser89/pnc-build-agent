@@ -74,7 +74,7 @@ public class TaskStatusUpdateEvent implements Serializable {
         } catch (JsonProcessingException e) {
             log.error("Cannot serialize object.", e);
         }
-        return null; //TODO ?
+        return null;
     }
 
     public static TaskStatusUpdateEvent fromJson(String serialized) throws IOException {

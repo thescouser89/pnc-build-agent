@@ -21,7 +21,7 @@ package org.jboss.pnc.buildagent;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class TestProcess {
+public class MockProcess {
 
     public static final String WELCOME_MESSAGE = "Hi there! I'm a long running process.";
     public static final String MESSAGE = "Hello again!";

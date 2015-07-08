@@ -18,6 +18,9 @@
 
 package org.jboss.pnc.buildagent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -29,6 +32,8 @@ public class TermdServer {
     private static final AtomicInteger port_pool = new AtomicInteger(8090);
 
     private static Thread serverThread;
+
+    private static final Logger log = LoggerFactory.getLogger(TermdServer.class);
 
     public static int getNextPort() {
         return port_pool.getAndIncrement();
@@ -45,7 +50,7 @@ public class TermdServer {
     public static void startServer(String host, int port) throws InterruptedException {
         Semaphore mutex = new Semaphore(1);
         Runnable onStart = () ->  {
-            System.out.println("Server started."); //TODO log
+            log.info("Server started.");
             mutex.release();
         };
         mutex.acquire();
@@ -53,7 +58,9 @@ public class TermdServer {
             try {
                 new Main().start(host, port, onStart);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error("Server was interrupted", e);
+            } catch (BuildAgentException e) {
+                log.error("Cannot start server.", e);
             }
         }, "termd-serverThread-thread");
         serverThread.start();
@@ -62,7 +69,7 @@ public class TermdServer {
     }
 
     public static void stopServer() {
-        System.out.println("Stopping server..."); //TODO log
+        log.info("Stopping server...");
         serverThread.interrupt();
     }
 

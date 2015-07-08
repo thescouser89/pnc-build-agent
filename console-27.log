@@ -1,0 +1,8 @@
+% java -cp ./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 4
+Hi there! I'm a long running process.
+I'll write to stdout test message 'Hello again!' 4 times with 250ms delay.
+0 : Hello again!
+1 : Hello again!
+2 : Hello again!
+3 : Hello again!
+% # Finished with status: COMPLETED
