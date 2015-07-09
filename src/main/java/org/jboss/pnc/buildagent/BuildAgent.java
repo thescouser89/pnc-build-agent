@@ -27,15 +27,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.Charset;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -51,7 +51,7 @@ public class BuildAgent {
     private final List<PtyMaster> runningTasks = new ArrayList<>();
 
     private final Set<Consumer<PtyStatusEvent>> statusUpdateListeners = new HashSet<>();
-    private File logFolder = Paths.get("").toAbsolutePath().toFile();
+    private Optional<Path> logFolder;
     private Charset charset = Charset.forName("UTF-8");
     private UndertowBootstrap undertowBootstrap;
 
@@ -66,18 +66,15 @@ public class BuildAgent {
         return statusUpdateListeners.remove(statusUpdateListener);
     }
 
-    public static void main(String[] args) throws Exception {
-        new BuildAgent().start("0.0.0.0", 8080, null);
-    }
-
-    public void start(String host, int portCandidate, final Runnable onStart) throws InterruptedException, BuildAgentException {
+    public void start(String host, int portCandidate, Optional<Path> logFolder, final Runnable onStart) throws InterruptedException, BuildAgentException {
         if(portCandidate == 0) {
             portCandidate = findFirstFreePort();
         }
         this.port = portCandidate;
         this.host = host;
+        this.logFolder = logFolder;
 
-        ptyBootstrap = new PtyBootstrap(taskCreationListener());
+        ptyBootstrap = new PtyBootstrap(onTaskCreated());
 
         undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
 
@@ -85,7 +82,7 @@ public class BuildAgent {
             @Override
             public void accept(Boolean event) {
                 if (event) {
-                    System.out.println("Server started on " + port);
+                    System.out.println("Server started on " + host + ":" + port);
                     if (onStart != null)
                         onStart.run();
                 } else {
@@ -103,53 +100,58 @@ public class BuildAgent {
         }
     }
 
-    private Consumer<PtyMaster> taskCreationListener() {
+    private Consumer<PtyMaster> onTaskCreated() {
         return (ptyMaster) -> {
-            try {
-                FileOutputStream fileOutputStream = registerProcessLogger(ptyMaster);
-                ptyMaster.setTaskStatusUpdateListener(taskStatusUpdateListener(fileOutputStream));
-                runningTasks.add(ptyMaster);
-            } catch (IOException e) {
-                log.error("Cannot open fileChannel: ", e);
+            Optional<FileOutputStream> fileOutputStream = Optional.empty();
+            if (logFolder.isPresent()) {
+                try {
+                    Path logPath = logFolder.get().resolve("console-" + ptyMaster.getId() + ".log");
+
+                    log.info("Opening log file ...");
+                    FileOutputStream stream = new FileOutputStream(logPath.toFile(), true);
+                    fileOutputStream = Optional.of(stream);
+                    registerProcessLogger(stream, ptyMaster);
+                } catch (IOException e) {
+                    log.error("Cannot open fileChannel: ", e);
+                }
             }
+            ptyMaster.setTaskStatusUpdateListener(onTaskStatusUpdate(fileOutputStream));
+            runningTasks.add(ptyMaster);
         };
     }
 
-    private Consumer<PtyStatusEvent> taskStatusUpdateListener (FileOutputStream fileOutputStream) {
+    private Consumer<PtyStatusEvent> onTaskStatusUpdate(Optional<FileOutputStream> fileOutputStream) {
         return (taskStatusUpdateEvent) -> {
-            PtyMaster task = taskStatusUpdateEvent.getProcess();
-            Status newStatus = taskStatusUpdateEvent.getNewStatus();
-            switch (newStatus) {
-                case COMPLETED:
-                case FAILED:
-                case INTERRUPTED:
-                    runningTasks.remove(task);
-                    try {
-                        String completed = "% # Finished with status: " + newStatus + "\r\n";
-                        fileOutputStream.write(completed.getBytes(charset));
-                        fileOutputStream.close();
-                    } catch (IOException e) {
-                        log.error("Cannot close log file channel: ", e);
-                    }
-            }
-            ;
+            fileOutputStream.ifPresent((fos) -> taskStatusUpdateLogger(fos, taskStatusUpdateEvent));
             notifyStatusUpdated(taskStatusUpdateEvent);
         };
     }
 
-    private FileOutputStream registerProcessLogger(PtyMaster task) throws IOException {
-        File logFile = new File(logFolder, "console-" + task.getId() + ".log");
+    private void taskStatusUpdateLogger(FileOutputStream fileOutputStream, PtyStatusEvent taskStatusUpdateEvent) {
+        PtyMaster task = taskStatusUpdateEvent.getProcess();
+        Status newStatus = taskStatusUpdateEvent.getNewStatus();
+        switch (newStatus) {
+            case COMPLETED:
+            case FAILED:
+            case INTERRUPTED:
+                runningTasks.remove(task);
+                try {
+                    String completed = "% # Finished with status: " + newStatus + "\r\n";
+                    fileOutputStream.write(completed.getBytes(charset));
+                    fileOutputStream.close();
+                } catch (IOException e) {
+                    log.error("Cannot close log file channel: ", e);
+                }
+        }
+    }
 
-        log.info("Opening log file ...");
-        FileOutputStream fileOutputStream = new FileOutputStream(logFile, true);
-
+    private void registerProcessLogger(FileOutputStream fileOutputStream, PtyMaster task) throws IOException {
         Consumer<String> processInputConsumer = (line) -> {
-
             try {
                 String command = "% " + line + "\r\n";
                 fileOutputStream.write(command.getBytes(charset));
             } catch (IOException e) {
-                log.error("Cannot write task " + task.getId() + " to output to fileChannel", e);
+                log.error("Cannot write command line of task " + task.getId() + " to file.", e);
             }
         };
 
@@ -159,14 +161,13 @@ public class BuildAgent {
                 try {
                     out.write(anInt);
                 } catch (IOException e) {
-                    log.error("Cannot write task {} output to fileChannel", task.getId());
+                    log.error("Cannot write task " + task.getId() + " output to file.", e);
                 }
             }
         };
 
         task.setProcessInputConsumer(processInputConsumer);
         task.setProcessOutputConsumer(processOutputConsumer);
-        return fileOutputStream;
     }
 
     void notifyStatusUpdated(PtyStatusEvent statusUpdateEvent) {
