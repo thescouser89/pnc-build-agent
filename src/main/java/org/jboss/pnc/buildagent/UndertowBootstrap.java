@@ -41,12 +41,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletException;
+import java.io.IOException;
+import java.net.URL;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 
 import static io.undertow.servlet.Servlets.defaultContainer;
@@ -134,7 +138,7 @@ public class UndertowBootstrap {
     private void handleHttpRequests(HttpServerExchange exchange) throws Exception {
         String requestPath = exchange.getRequestPath();
         if (requestPath.equals("/")) {
-            exchange.getResponseSender().send("Welcome to PNC Build Agent!");
+            exchange.getResponseSender().send("Welcome to PNC Build Agent (" + getManifestInformation() + ')');
             return;
         }
         if (requestPath.equals("/processes")) {
@@ -194,4 +198,29 @@ public class UndertowBootstrap {
             server.stop();
         }
     }
+
+
+    private String getManifestInformation() {
+        String result = "";
+        try {
+            final Enumeration<URL> resources = Welcome.class.getClassLoader().getResources("META-INF/MANIFEST.MF");
+
+            while (resources.hasMoreElements()) {
+                final URL jarUrl = resources.nextElement();
+
+                log.trace("Processing jar resource " + jarUrl);
+                if (jarUrl.getFile().contains("build-agent")) {
+                    final Manifest manifest = new Manifest(jarUrl.openStream());
+                    result = manifest.getMainAttributes().getValue("Implementation-Version");
+                    result += " ( SHA: " + manifest.getMainAttributes().getValue("Scm-Revision") + " ) ";
+                    break;
+                }
+            }
+        } catch (final IOException e) {
+            log.trace( "Error retrieving information from manifest", e);
+        }
+
+        return result;
+    }
+
 }
