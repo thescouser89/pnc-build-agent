@@ -62,11 +62,12 @@ public class UndertowBootstrap {
 
     final String host;
     final int port;
-    final Main termdHandler;
+    final BuildAgent termdHandler;
     private final Executor executor = Executors.newFixedThreadPool(1);
     private final Collection<PtyMaster> runningTasks;
+    private Undertow server;
 
-    public UndertowBootstrap(String host, int port, Main termdHandler, Collection runningTasks) {
+    public UndertowBootstrap(String host, int port, BuildAgent termdHandler, Collection runningTasks) {
         this.host = host;
         this.port = port;
         this.termdHandler = termdHandler;
@@ -107,12 +108,12 @@ public class UndertowBootstrap {
                 .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleWebSocketRequests(exchange))
                 .addPrefixPath(httpPath, exchange -> UndertowBootstrap.this.handleHttpRequests(exchange));
 
-        Undertow undertow = Undertow.builder()
+        server = Undertow.builder()
                 .addHttpListener(port, host)
                 .setHandler(pathHandler)
                 .build();
 
-        undertow.start();
+        server.start();
 
         completionHandler.accept(true);
     }
@@ -186,5 +187,11 @@ public class UndertowBootstrap {
 
         HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
         return webSocketHandshakeHandler;
+    }
+
+    public void stop() {
+        if(server != null) {
+            server.stop();
+        }
     }
 }

@@ -30,6 +30,7 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.nio.charset.Charset;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -41,9 +42,9 @@ import java.util.function.Consumer;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class Main {
+public class BuildAgent {
 
-    Logger log = LoggerFactory.getLogger(Main.class);
+    Logger log = LoggerFactory.getLogger(BuildAgent.class);
 
     PtyBootstrap ptyBootstrap;
 
@@ -52,7 +53,10 @@ public class Main {
     private final Set<Consumer<PtyStatusEvent>> statusUpdateListeners = new HashSet<>();
     private File logFolder = Paths.get("").toAbsolutePath().toFile();
     private Charset charset = Charset.forName("UTF-8");
+    private UndertowBootstrap undertowBootstrap;
 
+    private String host;
+    private int port;
 
     public boolean addStatusUpdateListener(Consumer<PtyStatusEvent> statusUpdateListener) {
         return statusUpdateListeners.add(statusUpdateListener);
@@ -63,26 +67,40 @@ public class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        new Main().start("localhost", 8080, null);
+        new BuildAgent().start("localhost", 8080, null);
     }
 
+    public void start(String host, int portCandidate, final Runnable onStart) throws InterruptedException, BuildAgentException {
+        if(portCandidate == 0) {
+            portCandidate = findFirstFreePort();
+        }
+        this.port = portCandidate;
+        this.host = host;
 
-    public void start(String host, int port, final Runnable onStart) throws InterruptedException, BuildAgentException {
         ptyBootstrap = new PtyBootstrap(taskCreationListener());
 
-        UndertowBootstrap undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
+        undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
 
         undertowBootstrap.bootstrap(new Consumer<Boolean>() {
             @Override
             public void accept(Boolean event) {
                 if (event) {
                     System.out.println("Server started on " + port);
-                    if (onStart != null) onStart.run();
+                    if (onStart != null)
+                        onStart.run();
                 } else {
                     System.out.println("Could not start");
                 }
             }
         });
+    }
+
+    private int findFirstFreePort() {
+        try (ServerSocket s = new ServerSocket(0)) {
+            return s.getLocalPort();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Could not obtain default port, try specifying it explicitly");
+        }
     }
 
     private Consumer<PtyMaster> taskCreationListener() {
@@ -131,7 +149,7 @@ public class Main {
                 String command = "% " + line + "\r\n";
                 fileOutputStream.write(command.getBytes(charset));
             } catch (IOException e) {
-                log.error("Cannot write task {} output to fileChannel", task.getId());
+                log.error("Cannot write task " + task.getId() + " to output to fileChannel", e);
             }
         };
 
@@ -160,5 +178,18 @@ public class Main {
 
     public Consumer<TtyConnection> getPtyBootstrap() {
         return ptyBootstrap;
+    }
+
+    public void stop() {
+        undertowBootstrap.stop();
+        System.out.println("Server stopped");
+    }
+
+    public String getHost() {
+        return host;
+    }
+
+    public int getPort() {
+        return port;
     }
 }
