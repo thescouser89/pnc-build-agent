@@ -21,6 +21,9 @@ package org.jboss.pnc.buildagent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -56,7 +59,8 @@ public class TermdServer {
         mutex.acquire();
         serverThread = new Thread(() -> {
             try {
-                new BuildAgent().start(host, port, onStart);
+                Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
+                new BuildAgent().start(host, port, logFolder, onStart);
             } catch (InterruptedException e) {
                 log.error("Server was interrupted", e);
             } catch (BuildAgentException e) {
