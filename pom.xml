@@ -63,7 +63,7 @@
           <configuration>
             <archive>
               <manifest>
-                <mainClass>org.jboss.pnc.buildagent.Main</mainClass>
+                <mainClass>org.jboss.pnc.buildagent.BuildAgent</mainClass>
               </manifest>
             </archive>
             <descriptorRefs>

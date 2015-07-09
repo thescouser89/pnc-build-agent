@@ -56,7 +56,7 @@ public class TermdServer {
         mutex.acquire();
         serverThread = new Thread(() -> {
             try {
-                new Main().start(host, port, onStart);
+                new BuildAgent().start(host, port, onStart);
             } catch (InterruptedException e) {
                 log.error("Server was interrupted", e);
             } catch (BuildAgentException e) {
