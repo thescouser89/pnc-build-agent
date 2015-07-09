@@ -45,5 +45,6 @@ public class MockProcess {
             System.out.println(i + " : " + MESSAGE);
             Thread.sleep(delay);
         }
+        System.out.println("I'm done.");
     }
 }

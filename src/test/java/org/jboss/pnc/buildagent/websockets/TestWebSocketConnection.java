@@ -150,6 +150,7 @@ public class TestWebSocketConnection {
         String fileContent = new String(Files.readAllBytes(logFile.toPath()));
         Assert.assertTrue("Missing executed command in log file.", fileContent.contains(TEST_COMMAND));
         Assert.assertTrue("Missing response message in log file.", fileContent.contains("Hello again"));
+        Assert.assertTrue("Incomplete log file.", fileContent.contains("I'm done."));
         Assert.assertTrue("Missing or invalid completion state.", fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()));
     }
 
