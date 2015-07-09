@@ -67,7 +67,7 @@ public class BuildAgent {
     }
 
     public static void main(String[] args) throws Exception {
-        new BuildAgent().start("localhost", 8080, null);
+        new BuildAgent().start("0.0.0.0", 8080, null);
     }
 
     public void start(String host, int portCandidate, final Runnable onStart) throws InterruptedException, BuildAgentException {
