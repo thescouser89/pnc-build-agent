@@ -63,7 +63,7 @@ public class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        new Main().start("0.0.0.0", 8080, null);
+        new Main().start("localhost", 8080, null);
     }
 
 
