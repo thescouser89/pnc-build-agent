@@ -66,15 +66,15 @@ public class UndertowBootstrap {
 
     final String host;
     final int port;
-    final BuildAgent termdHandler;
+    final BuildAgent buildAgent;
     private final Executor executor = Executors.newFixedThreadPool(1);
     private final Collection<PtyMaster> runningTasks;
     private Undertow server;
 
-    public UndertowBootstrap(String host, int port, BuildAgent termdHandler, Collection runningTasks) {
+    public UndertowBootstrap(String host, int port, BuildAgent buildAgent, Collection runningTasks) {
         this.host = host;
         this.port = port;
-        this.termdHandler = termdHandler;
+        this.buildAgent = buildAgent;
         this.runningTasks = runningTasks;
     }
 
@@ -125,12 +125,14 @@ public class UndertowBootstrap {
     private void handleWebSocketRequests(HttpServerExchange exchange) throws Exception {
         String requestPath = exchange.getRequestPath();
 
-        if (requestPath.equals("/socket/term")) {
-            getWebSocketHandler().handleRequest(exchange);
+        if (requestPath.startsWith("/socket/term")) {
+            String invokerContext = requestPath.replace("/socket/term/", "");
+            getWebSocketHandler(invokerContext).handleRequest(exchange);
             return;
         }
-        if (requestPath.equals("/socket/process-status-updates")) {
-            webSocketStatusUpdateHandler().handleRequest(exchange);
+        if (requestPath.startsWith("/socket/process-status-updates")) {
+            String invokerContext = requestPath.replace("/socket/process-status-updates/", "");
+            webSocketStatusUpdateHandler(invokerContext).handleRequest(exchange);
             return;
         }
     }
@@ -156,37 +158,42 @@ public class UndertowBootstrap {
         };
     }
 
-    private HttpHandler getWebSocketHandler() {
-        WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
-            WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
-            termdHandler.getPtyBootstrap().accept(conn);
+    private HttpHandler getWebSocketHandler(String invokerContext) {
+        WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
+
+            WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor, invokerContext);
+            buildAgent.getPtyBootstrap().accept(conn);
         };
 
-        HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
+        HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(onWebSocketConnected);
         return webSocketHandshakeHandler;
     }
 
-    private HttpHandler webSocketStatusUpdateHandler() {
+    private HttpHandler webSocketStatusUpdateHandler(String invokerContext) {
         WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
             Consumer<PtyStatusEvent> statusUpdateListener = (statusUpdateEvent) -> {
-                Map<String, Object> statusUpdate = new HashMap<>();
-                statusUpdate.put("action", "status-update");
-                TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
-                statusUpdate.put("event", taskStatusUpdateEventWrapper);
+                boolean isContextDefined = invokerContext != null && !invokerContext.equals("");
+                boolean isContextMatching = invokerContext.equals(statusUpdateEvent.getContext());
+                if (!isContextDefined || isContextMatching) {
+                    Map<String, Object> statusUpdate = new HashMap<>();
+                    statusUpdate.put("action", "status-update");
+                    TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
+                    statusUpdate.put("event", taskStatusUpdateEventWrapper);
 
-                ObjectMapper objectMapper = new ObjectMapper();
-                try {
-                    String message = objectMapper.writeValueAsString(statusUpdate);
-                    WebSockets.sendText(message, webSocketChannel, null);
-                } catch (JsonProcessingException e) {
-                    log.error("Cannot write object to JSON", e);
-                    String errorMessage = "Cannot write object to JSON: " + e.getMessage();
-                    WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    try {
+                        String message = objectMapper.writeValueAsString(statusUpdate);
+                        WebSockets.sendText(message, webSocketChannel, null);
+                    } catch (JsonProcessingException e) {
+                        log.error("Cannot write object to JSON", e);
+                        String errorMessage = "Cannot write object to JSON: " + e.getMessage();
+                        WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
+                    }
                 }
             };
             log.debug("Registering new status update listener {}.", statusUpdateListener);
-            termdHandler.addStatusUpdateListener(statusUpdateListener);
-            webSocketChannel.addCloseTask((task) -> termdHandler.removeStatusUpdateListener(statusUpdateListener));
+            buildAgent.addStatusUpdateListener(statusUpdateListener);
+            webSocketChannel.addCloseTask((task) -> buildAgent.removeStatusUpdateListener(statusUpdateListener));
         };
 
         HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);

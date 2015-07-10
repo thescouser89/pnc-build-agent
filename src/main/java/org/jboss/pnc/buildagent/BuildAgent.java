@@ -22,11 +22,9 @@ import io.termd.core.pty.PtyBootstrap;
 import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.PtyStatusEvent;
 import io.termd.core.pty.Status;
-import io.termd.core.tty.TtyConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -121,23 +119,34 @@ public class BuildAgent {
     }
 
     private Consumer<PtyStatusEvent> onTaskStatusUpdate(Optional<FileOutputStream> fileOutputStream) {
-        return (taskStatusUpdateEvent) -> {
-            fileOutputStream.ifPresent((fos) -> taskStatusUpdateLogger(fos, taskStatusUpdateEvent));
-            notifyStatusUpdated(taskStatusUpdateEvent);
+        return (statusUpdateEvent) -> {
+            fileOutputStream.ifPresent((fos) -> finalizeLogOnFinalStatus(fos, statusUpdateEvent));
+            removeCompletedTask(statusUpdateEvent);
+            notifyStatusUpdated(statusUpdateEvent);
         };
     }
 
-    private void taskStatusUpdateLogger(FileOutputStream fileOutputStream, PtyStatusEvent taskStatusUpdateEvent) {
-        PtyMaster task = taskStatusUpdateEvent.getProcess();
-        Status newStatus = taskStatusUpdateEvent.getNewStatus();
+    private void removeCompletedTask(PtyStatusEvent statusUpdateEvent) {
+        Status newStatus = statusUpdateEvent.getNewStatus();
         switch (newStatus) {
             case COMPLETED:
             case FAILED:
             case INTERRUPTED:
+                PtyMaster task = statusUpdateEvent.getProcess();
                 runningTasks.remove(task);
+        }
+    }
+
+    private void finalizeLogOnFinalStatus(FileOutputStream fileOutputStream, PtyStatusEvent statusUpdateEvent) {
+        Status newStatus = statusUpdateEvent.getNewStatus();
+        switch (newStatus) {
+            case COMPLETED:
+            case FAILED:
+            case INTERRUPTED:
                 try {
                     String completed = "% # Finished with status: " + newStatus + "\r\n";
                     fileOutputStream.write(completed.getBytes(charset));
+                    log.debug("Closing log output stream for task {}.", statusUpdateEvent.getProcess().getId());
                     fileOutputStream.close();
                 } catch (IOException e) {
                     log.error("Cannot close log file channel: ", e);
@@ -156,10 +165,9 @@ public class BuildAgent {
         };
 
         Consumer<int[]> processOutputConsumer = (ints) -> {
-            DataOutputStream out = new DataOutputStream(fileOutputStream);
             for (int anInt : ints) {
                 try {
-                    out.write(anInt);
+                    fileOutputStream.write(anInt);
                 } catch (IOException e) {
                     log.error("Cannot write task " + task.getId() + " output to file.", e);
                 }
@@ -172,12 +180,12 @@ public class BuildAgent {
 
     void notifyStatusUpdated(PtyStatusEvent statusUpdateEvent) {
         for (Consumer<PtyStatusEvent> statusUpdateListener : statusUpdateListeners) {
-            log.debug("Notifying listener {} status update {}", statusUpdateListener, statusUpdateEvent);
+            log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, statusUpdateEvent.getProcess().getId(), statusUpdateEvent.getNewStatus());
             statusUpdateListener.accept(statusUpdateEvent);
         }
     }
 
-    public Consumer<TtyConnection> getPtyBootstrap() {
+    public PtyBootstrap getPtyBootstrap() {
         return ptyBootstrap;
     }
 

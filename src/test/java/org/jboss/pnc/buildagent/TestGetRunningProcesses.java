@@ -77,9 +77,11 @@ public class TestGetRunningProcesses {
         JsonNode node = readResponse(connection);
         Assert.assertEquals(0, node.size());
 
+        String context = this.getClass().getName() + ".getRunningProcesses";
+
         ObjectWrapper<Boolean> resultReceived = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
-            if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING)) {
+            if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING) && context.equals(statusUpdateEvent.getContext())) {
                 try {
                     HttpURLConnection afterExecution = retrieveProcessList();
                     Assert.assertEquals(afterExecution.getResponseMessage(), 200, afterExecution.getResponseCode());
@@ -91,13 +93,14 @@ public class TestGetRunningProcesses {
                 }
             }
         };
-        Client eventClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate);
+        Client eventClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
         Consumer<String> onResponseData = (response) -> {};
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, Optional.of(onResponseData));
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context);
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
 
         Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();
-        Wait.forCondition(evaluationSupplier, 3, ChronoUnit.SECONDS);
+        Wait.forCondition(evaluationSupplier, 3, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
 
     }
 

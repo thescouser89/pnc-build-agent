@@ -38,8 +38,8 @@ public class TaskStatusUpdateEventSerialization {
 
     @Test
     public void testTaskStatusUpdateEventSerialization() throws IOException {
-        PtyMaster task = new PtyMaster(null, null, null, "");
-        PtyStatusEvent termTaskStatusUpdateEvent = new PtyStatusEvent(task, Status.NEW, Status.RUNNING);
+        PtyMaster task = new PtyMaster(null, null, null, "", "");
+        PtyStatusEvent termTaskStatusUpdateEvent = new PtyStatusEvent(task, Status.NEW, Status.RUNNING, "");
 
         TaskStatusUpdateEvent taskStatusUpdateEvent = new TaskStatusUpdateEvent(termTaskStatusUpdateEvent);
         String taskId = taskStatusUpdateEvent.getTaskId();
