@@ -107,7 +107,7 @@ public class BuildAgent {
                 try {
                     Path logPath = logFolder.get().resolve("console-" + ptyMaster.getId() + ".log");
 
-                    log.info("Opening log file ...");
+                    log.info("Opening log file {}.", logPath);
                     FileOutputStream stream = new FileOutputStream(logPath.toFile(), true);
                     fileOutputStream = Optional.of(stream);
                     registerProcessLogger(stream, ptyMaster);

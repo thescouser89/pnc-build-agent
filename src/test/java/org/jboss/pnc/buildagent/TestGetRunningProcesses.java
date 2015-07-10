@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -93,7 +94,7 @@ public class TestGetRunningProcesses {
         Client eventClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate);
 
         Consumer<String> onResponseData = (response) -> {};
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, onResponseData);
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, Optional.of(onResponseData));
 
         Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();
         Wait.forCondition(evaluationSupplier, 3, ChronoUnit.SECONDS);

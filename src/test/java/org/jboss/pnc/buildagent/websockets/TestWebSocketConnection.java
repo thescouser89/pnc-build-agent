@@ -22,6 +22,7 @@ import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.MockProcess;
 import org.jboss.pnc.buildagent.TermdServer;
 import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -65,6 +66,9 @@ public class TestWebSocketConnection {
 
     private File logFolder = Paths.get("").toAbsolutePath().toFile();
 
+    String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
+    String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
+
     @BeforeClass
     public static void setUP() throws Exception {
         TermdServer.startServer(HOST, PORT);
@@ -83,8 +87,6 @@ public class TestWebSocketConnection {
 
     @Test
     public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults() throws Exception {
-        String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
-        String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
 
         List<TaskStatusUpdateEvent> remoteResponseStatuses = new ArrayList<>();
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
@@ -97,11 +99,35 @@ public class TestWebSocketConnection {
         Consumer<String> onResponseData = (responseData) -> {
             remoteResponses.add(responseData);
         };
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, onResponseData);
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, Optional.of(onResponseData));
 
         assertThatResultWasReceived(remoteResponses, 5, ChronoUnit.SECONDS);
         assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 5, ChronoUnit.SECONDS);
         assertThatLogWasWritten(remoteResponseStatuses);
+
+        commandExecutingClient.close();
+        statusListenerClient.close();
+    }
+
+    @Test
+    public void shouldExecuteTwoTasksAndWriteToLogs() throws Exception {
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
+                assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                completed.set(true);
+            }
+        };
+        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate);
+
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, Optional.empty());
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS);
+        completed.set(false);
+
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS);
+        completed.set(false);
 
         commandExecutingClient.close();
         statusListenerClient.close();
@@ -144,10 +170,20 @@ public class TestWebSocketConnection {
 
         TaskStatusUpdateEvent taskStatusUpdateEvent = firstResponse.get();
         String taskId = taskStatusUpdateEvent.getTaskId() + "";
+
+        assertTestCommandOutputIsWrittenToLog(taskId);
+    }
+
+    private void assertTestCommandOutputIsWrittenToLog(String taskId) {
         File logFile = new File(logFolder, "console-" + taskId + ".log");
         Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
 
-        String fileContent = new String(Files.readAllBytes(logFile.toPath()));
+        String fileContent = null;
+        try {
+            fileContent = new String(Files.readAllBytes(logFile.toPath()));
+        } catch (IOException e) {
+            throw new AssertionError("Cannot read log file.", e);
+        }
         Assert.assertTrue("Missing executed command in log file.", fileContent.contains(TEST_COMMAND));
         Assert.assertTrue("Missing response message in log file.", fileContent.contains("Hello again"));
         Assert.assertTrue("Incomplete log file.", fileContent.contains("I'm done."));

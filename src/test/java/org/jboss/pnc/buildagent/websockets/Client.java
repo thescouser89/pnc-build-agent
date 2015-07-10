@@ -36,6 +36,7 @@ import javax.websocket.Session;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
@@ -193,7 +194,7 @@ public class Client {
         return client;
     }
 
-    public static Client connectCommandExecutingClient(String webSocketUrl, String command, Consumer<String> onResponseData) {
+    public static Client connectCommandExecutingClient(String webSocketUrl, String command, Optional<Consumer<String>> responseDataConsumer) {
         ObjectWrapper<Boolean> testCommandExecuted = new ObjectWrapper<>(false);
 
         Client client = Client.initializeDefault();
@@ -205,7 +206,7 @@ public class Client {
                     executeRemoteCommand(client, command);
                 }
             } else {
-                onResponseData.accept(responseData);
+                responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
             }
         };
         client.onBinaryMessage(responseConsumer);
@@ -221,7 +222,7 @@ public class Client {
         return client;
     }
 
-    private static void executeRemoteCommand(Client client, String command) {
+    public static void executeRemoteCommand(Client client, String command) {
         log.info("Executing remote command ...");
         RemoteEndpoint.Basic remoteEndpoint = client.getRemoteEndpoint();
         String data = "{\"action\":\"read\",\"data\":\"" + command + "\\r\\n\"}";
