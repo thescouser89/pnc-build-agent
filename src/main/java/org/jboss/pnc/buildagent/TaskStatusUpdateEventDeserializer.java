@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.jboss.pnc.buildagent.spi;
+package org.jboss.pnc.buildagent;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;

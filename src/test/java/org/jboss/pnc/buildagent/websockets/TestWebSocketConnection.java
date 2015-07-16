@@ -21,7 +21,7 @@ package org.jboss.pnc.buildagent.websockets;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.MockProcess;
 import org.jboss.pnc.buildagent.TermdServer;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.junit.AfterClass;
@@ -64,7 +64,8 @@ public class TestWebSocketConnection {
     private static final int PORT = TermdServer.getNextPort();
     private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 4";
 
-    private File logFolder = Paths.get("").toAbsolutePath().toFile();
+    private static File logFolder = Paths.get("").toAbsolutePath().toFile();
+    private static File logFile = new File(logFolder, "console.log");
 
     String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
     String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
@@ -77,6 +78,9 @@ public class TestWebSocketConnection {
     @AfterClass
     public static void tearDown() {
         TermdServer.stopServer();
+        log.debug("Deleting log file {}", logFile);
+        logFile.delete();
+
     }
 
     @Test
@@ -102,7 +106,7 @@ public class TestWebSocketConnection {
         Consumer<String> onResponseData = (responseData) -> {
             remoteResponses.add(responseData);
         };
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context);
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context, Optional.empty());
         Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
 
         assertThatResultWasReceived(remoteResponses, 5, ChronoUnit.SECONDS);
@@ -127,7 +131,7 @@ public class TestWebSocketConnection {
         };
         Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context);
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context, Optional.empty());
         Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
         Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
         completed.set(false);
@@ -138,6 +142,33 @@ public class TestWebSocketConnection {
 
         commandExecutingClient.close();
         statusListenerClient.close();
+    }
+
+    @Test
+    public void clientShouldBeAbleToConnectToRunningProcess() throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcess";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) && context.equals(statusUpdateEvent.getContext())) {
+                completed.set(true);
+            }
+        };
+        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
+
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context, Optional.empty());
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+
+        StringBuilder response = new StringBuilder();
+        Consumer<String> onResponse = (message) -> {
+            response.append(message);
+        };
+        Client commandListeningClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponse), context, Optional.of("reconnect"));
+
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+
+        Assert.assertTrue("Missing or invalid response: " + response.toString(), response.toString().contains("I'm done."));
+
     }
 
     private void assertThatResultWasReceived(List<String> strings, long timeout, TemporalUnit timeUnit) throws InterruptedException {
@@ -193,7 +224,6 @@ public class TestWebSocketConnection {
     }
 
     private void assertTestCommandOutputIsWrittenToLog(String taskId) {
-        File logFile = new File(logFolder, "console-" + taskId + ".log");
         Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
 
         String fileContent;
@@ -206,8 +236,6 @@ public class TestWebSocketConnection {
         Assert.assertTrue("Missing response message in log file of task " + taskId + ".", fileContent.contains("Hello again"));
         Assert.assertTrue("Missing final line in the log file of task " + taskId + ".", fileContent.contains("I'm done."));
         Assert.assertTrue("Missing or invalid completion state of task " + taskId + ".", fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()));
-        log.debug("Deleting log file {}", logFile);
-        logFile.delete();
     }
 
     private String readUrl(String host, int port, String path) throws IOException {

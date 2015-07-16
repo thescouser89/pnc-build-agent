@@ -20,7 +20,7 @@ package org.jboss.pnc.buildagent.websockets;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.slf4j.Logger;
@@ -190,14 +190,14 @@ public class Client {
         });
 
         try {
-            client.connect(webSocketUrl + "/" + context);
+            client.connect(webSocketUrl + "/?context=" + context);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
         return client;
     }
 
-    public static Client connectCommandExecutingClient(String webSocketUrl, Optional<Consumer<String>> responseDataConsumer, String context) throws InterruptedException, TimeoutException {
+    public static Client connectCommandExecutingClient(String webSocketUrl, Optional<Consumer<String>> responseDataConsumer, String context, Optional<String> sessionId) throws InterruptedException, TimeoutException {
         ObjectWrapper<Boolean> connected = new ObjectWrapper<>(false);
 
         Client client = Client.initializeDefault();
@@ -214,8 +214,12 @@ public class Client {
         client.onClose(closeReason -> {
         });
 
+        String sessionIdParam = "";
+        if (sessionId.isPresent()) sessionIdParam = "&sessionId=" + sessionId;
+
+
         try {
-            client.connect(webSocketUrl + "/" + context);
+            client.connect(webSocketUrl + "/?context=" + context + sessionIdParam);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }

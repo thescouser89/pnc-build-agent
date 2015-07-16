@@ -21,7 +21,6 @@ package org.jboss.pnc.buildagent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.Status;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.jboss.pnc.buildagent.websockets.Client;
@@ -96,7 +95,7 @@ public class TestGetRunningProcesses {
         Client eventClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
         Consumer<String> onResponseData = (response) -> {};
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context);
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context, Optional.empty());
         Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
 
         Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();

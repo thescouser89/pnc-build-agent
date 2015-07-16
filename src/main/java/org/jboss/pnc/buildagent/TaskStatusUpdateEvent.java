@@ -16,14 +16,14 @@
  * limitations under the License.
  */
 
-package org.jboss.pnc.buildagent.spi;
+package org.jboss.pnc.buildagent;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import io.termd.core.pty.PtyStatusEvent; //TODO do not expose termd internals
+import io.termd.core.pty.PtyStatusEvent;
 import io.termd.core.pty.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -21,7 +21,6 @@ package org.jboss.pnc.buildagent;
 import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.PtyStatusEvent;
 import io.termd.core.pty.Status;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;

@@ -25,7 +25,6 @@ import io.termd.core.pty.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.Charset;
@@ -100,27 +99,18 @@ public class BuildAgent {
 
     private Consumer<PtyMaster> onTaskCreated() {
         return (ptyMaster) -> {
-            Optional<FileOutputStream> fileOutputStream = Optional.empty();
-            if (logFolder.isPresent()) {
-                try {
-                    Path logPath = logFolder.get().resolve("console-" + ptyMaster.getId() + ".log");
+            ptyMaster.setProcessInputConsumer(undertowBootstrap.getTerminalSession().getProcessInputConsumer());
+            ptyMaster.setProcessOutputConsumer(undertowBootstrap.getTerminalSession().getProcessOutputConsumer());
 
-                    log.info("Opening log file {}.", logPath);
-                    FileOutputStream stream = new FileOutputStream(logPath.toFile(), true);
-                    fileOutputStream = Optional.of(stream);
-                    registerProcessLogger(stream, ptyMaster);
-                } catch (IOException e) {
-                    log.error("Cannot open fileChannel: ", e);
-                }
-            }
-            ptyMaster.setTaskStatusUpdateListener(onTaskStatusUpdate(fileOutputStream));
+            ptyMaster.setTaskStatusUpdateListener(onTaskStatusUpdate());
             runningTasks.add(ptyMaster);
+            undertowBootstrap.getTerminalSession().addTask(ptyMaster);
+
         };
     }
 
-    private Consumer<PtyStatusEvent> onTaskStatusUpdate(Optional<FileOutputStream> fileOutputStream) {
+    private Consumer<PtyStatusEvent> onTaskStatusUpdate() {
         return (statusUpdateEvent) -> {
-            fileOutputStream.ifPresent((fos) -> finalizeLogOnFinalStatus(fos, statusUpdateEvent));
             removeCompletedTask(statusUpdateEvent);
             notifyStatusUpdated(statusUpdateEvent);
         };
@@ -133,49 +123,9 @@ public class BuildAgent {
             case FAILED:
             case INTERRUPTED:
                 PtyMaster task = statusUpdateEvent.getProcess();
+                undertowBootstrap.getTerminalSession().removeTask(task);
                 runningTasks.remove(task);
         }
-    }
-
-    private void finalizeLogOnFinalStatus(FileOutputStream fileOutputStream, PtyStatusEvent statusUpdateEvent) {
-        Status newStatus = statusUpdateEvent.getNewStatus();
-        switch (newStatus) {
-            case COMPLETED:
-            case FAILED:
-            case INTERRUPTED:
-                try {
-                    String completed = "% # Finished with status: " + newStatus + "\r\n";
-                    fileOutputStream.write(completed.getBytes(charset));
-                    log.debug("Closing log output stream for task {}.", statusUpdateEvent.getProcess().getId());
-                    fileOutputStream.close();
-                } catch (IOException e) {
-                    log.error("Cannot close log file channel: ", e);
-                }
-        }
-    }
-
-    private void registerProcessLogger(FileOutputStream fileOutputStream, PtyMaster task) throws IOException {
-        Consumer<String> processInputConsumer = (line) -> {
-            try {
-                String command = "% " + line + "\r\n";
-                fileOutputStream.write(command.getBytes(charset));
-            } catch (IOException e) {
-                log.error("Cannot write command line of task " + task.getId() + " to file.", e);
-            }
-        };
-
-        Consumer<int[]> processOutputConsumer = (ints) -> {
-            for (int anInt : ints) {
-                try {
-                    fileOutputStream.write(anInt);
-                } catch (IOException e) {
-                    log.error("Cannot write task " + task.getId() + " output to file.", e);
-                }
-            }
-        };
-
-        task.setProcessInputConsumer(processInputConsumer);
-        task.setProcessOutputConsumer(processOutputConsumer);
     }
 
     void notifyStatusUpdated(PtyStatusEvent statusUpdateEvent) {
@@ -200,5 +150,9 @@ public class BuildAgent {
 
     public int getPort() {
         return port;
+    }
+
+    public Optional<Path> getLogFolder() {
+        return logFolder;
     }
 }
