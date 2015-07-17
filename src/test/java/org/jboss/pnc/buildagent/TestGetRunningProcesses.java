@@ -99,7 +99,7 @@ public class TestGetRunningProcesses {
         Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
 
         Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();
-        Wait.forCondition(evaluationSupplier, 3, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        Wait.forCondition(evaluationSupplier, 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
 
     }
 
