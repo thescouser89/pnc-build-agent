@@ -21,6 +21,7 @@ package org.jboss.pnc.buildagent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -31,7 +32,7 @@ import java.util.function.Consumer;
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
  */
-public class TerminalSessionIoLogger implements AutoCloseable {
+public class TerminalSessionIoLogger implements Closeable {
 
     Logger log = LoggerFactory.getLogger(TerminalSessionIoLogger.class);
     private Charset charset = Charset.defaultCharset();
@@ -75,6 +76,11 @@ public class TerminalSessionIoLogger implements AutoCloseable {
 
 
     public void close() {
+        try {
+            stream.close();
+        } catch (IOException e) {
+            log.error("Cannot close log output stream.", e);
+        }
     }
 
     public Consumer<String> getInputLogger() {
