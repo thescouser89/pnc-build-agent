@@ -19,13 +19,11 @@
 package org.jboss.pnc.buildagent;
 
 import io.termd.core.pty.PtyMaster;
-import io.termd.core.pty.Status;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -103,7 +101,7 @@ public class TerminalSession {
         if (tasks.isEmpty()) {
             terminalSessionIoLogger.ifPresent(ioLogger -> {
                 finalizeLog(ioLogger, task);
-                ioLogger.close();
+                //ioLogger.close(); //TODO close
             });
         }
     }

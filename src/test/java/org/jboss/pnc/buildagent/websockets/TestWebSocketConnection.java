@@ -97,22 +97,19 @@ public class TestWebSocketConnection {
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
             remoteResponseStatuses.add(statusUpdateEvent);
         };
-        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
-
         List<String> remoteResponses = new ArrayList<>();
 
         Consumer<String> onResponseData = (responseData) -> {
             remoteResponses.add(responseData);
         };
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context, Optional.empty());
-        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.of(onResponseData), onStatusUpdate, context, Optional.empty());
+        buildAgentClient.executeCommand(TEST_COMMAND);
 
         assertThatResultWasReceived(remoteResponses, 10, ChronoUnit.SECONDS);
         assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 10, ChronoUnit.SECONDS);
         assertThatLogWasWritten(remoteResponseStatuses);
 
-        commandExecutingClient.close();
-        statusListenerClient.close();
+        buildAgentClient.close();
     }
 
     @Test
@@ -127,19 +124,18 @@ public class TestWebSocketConnection {
                 completed.set(true);
             }
         };
-        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context, Optional.empty());
-        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
+
+        buildAgentClient.executeCommand(TEST_COMMAND);
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
         completed.set(false);
 
-        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        buildAgentClient.executeCommand(TEST_COMMAND);
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
         completed.set(false);
 
-        commandExecutingClient.close();
-        statusListenerClient.close();
+        buildAgentClient.close();
     }
 
     @Test
@@ -152,20 +148,21 @@ public class TestWebSocketConnection {
                 completed.set(true);
             }
         };
-        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
-
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context, Optional.empty());
-        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
+        buildAgentClient.executeCommand(TEST_COMMAND);
 
         StringBuilder response = new StringBuilder();
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        Client commandListeningClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponse), context, Optional.of("reconnect"));
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalUrl, listenerUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"));
 
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
 
         Assert.assertTrue("Missing or invalid response: " + response.toString(), response.toString().contains("I'm done."));
+
+        buildAgentClientReconnected.close();
+        buildAgentClient.close();
 
     }
 

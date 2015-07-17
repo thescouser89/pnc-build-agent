@@ -180,6 +180,7 @@ public class UndertowBootstrap {
                 //    log.warn("Client is trying to connect to non existing session.");
                 //}
                 terminalSession.addListener(webSocketChannel);
+                log.debug("New socket listener added to an existing session.");
             } else {
                 terminalSession = new TerminalSession(buildAgent.getLogFolder());
                 //activeSessions.put(terminalSession.getId(), terminalSession); //TODO destroy and remove session when there is no connection and no running task
@@ -187,11 +188,11 @@ public class UndertowBootstrap {
                 WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, terminalSession, executor);
                 terminalSession.addListener(webSocketChannel);
                 buildAgent.getPtyBootstrap().accept(conn);
-
-                webSocketChannel.addCloseTask(channel -> {
-                    terminalSession.removeListener(webSocketChannel);
-                });
+                log.debug("New session created and socket listener added to it.");
             }
+            webSocketChannel.addCloseTask(channel -> {
+                terminalSession.removeListener(webSocketChannel);
+            });
         };
 
         HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(onWebSocketConnected);

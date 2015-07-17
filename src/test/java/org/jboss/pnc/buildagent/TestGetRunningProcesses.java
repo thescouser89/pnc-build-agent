@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
-import org.jboss.pnc.buildagent.websockets.Client;
+import org.jboss.pnc.buildagent.websockets.BuildAgentClient;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -92,15 +92,14 @@ public class TestGetRunningProcesses {
                 }
             }
         };
-        Client eventClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
-        Consumer<String> onResponseData = (response) -> {};
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context, Optional.empty());
-        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        //Client eventClient = BuildAgentClient.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
+        buildAgentClient.executeCommand(TEST_COMMAND);
 
         Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();
         Wait.forCondition(evaluationSupplier, 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
-
+        buildAgentClient.close();
     }
 
     private JsonNode readResponse(HttpURLConnection connection) throws IOException {
