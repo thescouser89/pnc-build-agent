@@ -21,7 +21,6 @@ package org.jboss.pnc.buildagent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.Status;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.jboss.pnc.buildagent.websockets.Client;
@@ -36,6 +35,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -76,6 +76,8 @@ public class TestGetRunningProcesses {
         JsonNode node = readResponse(connection);
         Assert.assertEquals(0, node.size());
 
+        String context = this.getClass().getName() + ".getRunningProcesses";
+
         ObjectWrapper<Boolean> resultReceived = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
             if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING)) {
@@ -90,13 +92,14 @@ public class TestGetRunningProcesses {
                 }
             }
         };
-        Client eventClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate);
+        Client eventClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
         Consumer<String> onResponseData = (response) -> {};
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, onResponseData);
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context, Optional.empty());
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
 
         Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();
-        Wait.forCondition(evaluationSupplier, 3, ChronoUnit.SECONDS);
+        Wait.forCondition(evaluationSupplier, 3, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
 
     }
 

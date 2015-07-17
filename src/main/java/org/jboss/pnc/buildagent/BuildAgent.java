@@ -22,12 +22,9 @@ import io.termd.core.pty.PtyBootstrap;
 import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.PtyStatusEvent;
 import io.termd.core.pty.Status;
-import io.termd.core.tty.TtyConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.Charset;
@@ -102,82 +99,43 @@ public class BuildAgent {
 
     private Consumer<PtyMaster> onTaskCreated() {
         return (ptyMaster) -> {
-            Optional<FileOutputStream> fileOutputStream = Optional.empty();
-            if (logFolder.isPresent()) {
-                try {
-                    Path logPath = logFolder.get().resolve("console-" + ptyMaster.getId() + ".log");
+            ptyMaster.setProcessInputConsumer(undertowBootstrap.getTerminalSession().getProcessInputConsumer());
+            ptyMaster.setProcessOutputConsumer(undertowBootstrap.getTerminalSession().getProcessOutputConsumer());
 
-                    log.info("Opening log file ...");
-                    FileOutputStream stream = new FileOutputStream(logPath.toFile(), true);
-                    fileOutputStream = Optional.of(stream);
-                    registerProcessLogger(stream, ptyMaster);
-                } catch (IOException e) {
-                    log.error("Cannot open fileChannel: ", e);
-                }
-            }
-            ptyMaster.setTaskStatusUpdateListener(onTaskStatusUpdate(fileOutputStream));
+            ptyMaster.setTaskStatusUpdateListener(onTaskStatusUpdate());
             runningTasks.add(ptyMaster);
+            undertowBootstrap.getTerminalSession().addTask(ptyMaster);
+
         };
     }
 
-    private Consumer<PtyStatusEvent> onTaskStatusUpdate(Optional<FileOutputStream> fileOutputStream) {
-        return (taskStatusUpdateEvent) -> {
-            fileOutputStream.ifPresent((fos) -> taskStatusUpdateLogger(fos, taskStatusUpdateEvent));
-            notifyStatusUpdated(taskStatusUpdateEvent);
+    private Consumer<PtyStatusEvent> onTaskStatusUpdate() {
+        return (statusUpdateEvent) -> {
+            removeCompletedTask(statusUpdateEvent);
+            notifyStatusUpdated(statusUpdateEvent);
         };
     }
 
-    private void taskStatusUpdateLogger(FileOutputStream fileOutputStream, PtyStatusEvent taskStatusUpdateEvent) {
-        PtyMaster task = taskStatusUpdateEvent.getProcess();
-        Status newStatus = taskStatusUpdateEvent.getNewStatus();
+    private void removeCompletedTask(PtyStatusEvent statusUpdateEvent) {
+        Status newStatus = statusUpdateEvent.getNewStatus();
         switch (newStatus) {
             case COMPLETED:
             case FAILED:
             case INTERRUPTED:
+                PtyMaster task = statusUpdateEvent.getProcess();
+                undertowBootstrap.getTerminalSession().removeTask(task);
                 runningTasks.remove(task);
-                try {
-                    String completed = "% # Finished with status: " + newStatus + "\r\n";
-                    fileOutputStream.write(completed.getBytes(charset));
-                    fileOutputStream.close();
-                } catch (IOException e) {
-                    log.error("Cannot close log file channel: ", e);
-                }
         }
-    }
-
-    private void registerProcessLogger(FileOutputStream fileOutputStream, PtyMaster task) throws IOException {
-        Consumer<String> processInputConsumer = (line) -> {
-            try {
-                String command = "% " + line + "\r\n";
-                fileOutputStream.write(command.getBytes(charset));
-            } catch (IOException e) {
-                log.error("Cannot write command line of task " + task.getId() + " to file.", e);
-            }
-        };
-
-        Consumer<int[]> processOutputConsumer = (ints) -> {
-            DataOutputStream out = new DataOutputStream(fileOutputStream);
-            for (int anInt : ints) {
-                try {
-                    out.write(anInt);
-                } catch (IOException e) {
-                    log.error("Cannot write task " + task.getId() + " output to file.", e);
-                }
-            }
-        };
-
-        task.setProcessInputConsumer(processInputConsumer);
-        task.setProcessOutputConsumer(processOutputConsumer);
     }
 
     void notifyStatusUpdated(PtyStatusEvent statusUpdateEvent) {
         for (Consumer<PtyStatusEvent> statusUpdateListener : statusUpdateListeners) {
-            log.debug("Notifying listener {} status update {}", statusUpdateListener, statusUpdateEvent);
+            log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, statusUpdateEvent.getProcess().getId(), statusUpdateEvent.getNewStatus());
             statusUpdateListener.accept(statusUpdateEvent);
         }
     }
 
-    public Consumer<TtyConnection> getPtyBootstrap() {
+    public PtyBootstrap getPtyBootstrap() {
         return ptyBootstrap;
     }
 
@@ -192,5 +150,9 @@ public class BuildAgent {
 
     public int getPort() {
         return port;
+    }
+
+    public Optional<Path> getLogFolder() {
+        return logFolder;
     }
 }

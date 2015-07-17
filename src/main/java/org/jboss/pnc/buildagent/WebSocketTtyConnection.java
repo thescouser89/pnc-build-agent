@@ -38,12 +38,12 @@ import java.util.concurrent.Executor;
 public class WebSocketTtyConnection extends HttpTtyConnection {
 
     private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
-    private final WebSocketChannel webSocketChannel;
+    private final TerminalSession terminalSession;
     private final Executor executor;
 
     @Override
     protected void write(byte[] buffer) {
-        WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+        terminalSession.onTtyByte(buffer);
     }
 
     @Override
@@ -51,12 +51,11 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
         executor.execute(task);
     }
 
-    public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, Executor executor) {
-        this.webSocketChannel = webSocketChannel;
+    public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, TerminalSession terminalSession, Executor executor) {
+        super();
+        this.terminalSession = terminalSession;
         this.executor = executor;
-
         registerWebSocketChannelListener(webSocketChannel);
-        webSocketChannel.resumeReceives();
     }
 
     private void registerWebSocketChannelListener(WebSocketChannel webSocketChannel) {
@@ -78,5 +77,6 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
             }
         };
         webSocketChannel.getReceiveSetter().set(listener);
+        webSocketChannel.resumeReceives();
     }
 }

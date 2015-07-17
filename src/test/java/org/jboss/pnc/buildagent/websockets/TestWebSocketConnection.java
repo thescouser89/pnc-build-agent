@@ -21,7 +21,8 @@ package org.jboss.pnc.buildagent.websockets;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.MockProcess;
 import org.jboss.pnc.buildagent.TermdServer;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -63,7 +64,11 @@ public class TestWebSocketConnection {
     private static final int PORT = TermdServer.getNextPort();
     private static final String TEST_COMMAND = "java -cp ./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 4";
 
-    private File logFolder = Paths.get("").toAbsolutePath().toFile();
+    private static File logFolder = Paths.get("").toAbsolutePath().toFile();
+    private static File logFile = new File(logFolder, "console.log");
+
+    String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
+    String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
 
     @BeforeClass
     public static void setUP() throws Exception {
@@ -73,6 +78,9 @@ public class TestWebSocketConnection {
     @AfterClass
     public static void tearDown() {
         TermdServer.stopServer();
+        log.debug("Deleting log file {}", logFile);
+        logFile.delete();
+
     }
 
     @Test
@@ -83,21 +91,21 @@ public class TestWebSocketConnection {
 
     @Test
     public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults() throws Exception {
-        String terminalUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_TERMINAL_PATH;
-        String listenerUrl = "http://" + HOST + ":" + PORT + WEB_SOCKET_LISTENER_PATH;
+        String context = this.getClass().getName() + ".clientShouldBeAbleToRunRemoteCommandAndReceiveResults";
 
         List<TaskStatusUpdateEvent> remoteResponseStatuses = new ArrayList<>();
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
             remoteResponseStatuses.add(statusUpdateEvent);
         };
-        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate);
+        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
         List<String> remoteResponses = new ArrayList<>();
 
         Consumer<String> onResponseData = (responseData) -> {
             remoteResponses.add(responseData);
         };
-        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, TEST_COMMAND, onResponseData);
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context, Optional.empty());
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
 
         assertThatResultWasReceived(remoteResponses, 5, ChronoUnit.SECONDS);
         assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 5, ChronoUnit.SECONDS);
@@ -105,6 +113,60 @@ public class TestWebSocketConnection {
 
         commandExecutingClient.close();
         statusListenerClient.close();
+    }
+
+    @Test
+    public void shouldExecuteTwoTasksAndWriteToLogs() throws Exception {
+
+        String context = this.getClass().getName() + ".shouldExecuteTwoTasksAndWriteToLogs";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) ) {
+                assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                completed.set(true);
+            }
+        };
+        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
+
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context, Optional.empty());
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
+        completed.set(false);
+
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        completed.set(false);
+
+        commandExecutingClient.close();
+        statusListenerClient.close();
+    }
+
+    @Test
+    public void clientShouldBeAbleToConnectToRunningProcess() throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcess";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
+                completed.set(true);
+            }
+        };
+        Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
+
+        Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context, Optional.empty());
+        Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
+
+        StringBuilder response = new StringBuilder();
+        Consumer<String> onResponse = (message) -> {
+            response.append(message);
+        };
+        Client commandListeningClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponse), context, Optional.of("reconnect"));
+
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+
+        Assert.assertTrue("Missing or invalid response: " + response.toString(), response.toString().contains("I'm done."));
+
     }
 
     private void assertThatResultWasReceived(List<String> strings, long timeout, TemporalUnit timeUnit) throws InterruptedException {
@@ -115,27 +177,27 @@ public class TestWebSocketConnection {
         };
 
         try {
-            Wait.forCondition(evaluationSupplier, timeout, timeUnit);
+            Wait.forCondition(evaluationSupplier, timeout, timeUnit, "Client was not connected within given timeout.");
         } catch (TimeoutException e) {
             throw new AssertionError("Response should contain message " + MockProcess.WELCOME_MESSAGE + ".", e);
         }
     }
 
     private void assertThatCommandCompletedSuccessfully(List<TaskStatusUpdateEvent> remoteResponseStatuses, long timeout, TemporalUnit timeUnit) throws InterruptedException {
-        Supplier<Boolean> evaluationSupplier = () -> {
+        Supplier<Boolean> checkForResponses = () -> {
             List<TaskStatusUpdateEvent> receivedStatuses = remoteResponseStatuses;
             List<Status> collectedUpdates = receivedStatuses.stream().map(event -> event.getNewStatus()).collect(Collectors.toList());
             return collectedUpdates.contains(Status.RUNNING) && collectedUpdates.contains(Status.COMPLETED);
         };
 
         try {
-            Wait.forCondition(evaluationSupplier, timeout, timeUnit);
+            Wait.forCondition(checkForResponses, timeout, timeUnit, "Client was not connected within given timeout.");
         } catch (TimeoutException e) {
             throw new AssertionError("Response should contain status Status.RUNNING and Status.COMPLETED.", e);
         }
     }
 
-    private void assertThatLogWasWritten(List<TaskStatusUpdateEvent> remoteResponseStatuses) throws IOException {
+    private void assertThatLogWasWritten(List<TaskStatusUpdateEvent> remoteResponseStatuses) throws IOException, TimeoutException, InterruptedException {
         List<TaskStatusUpdateEvent> responses = remoteResponseStatuses;
         Optional<TaskStatusUpdateEvent> firstResponse = responses.stream().findFirst();
         if (!firstResponse.isPresent()) {
@@ -144,13 +206,34 @@ public class TestWebSocketConnection {
 
         TaskStatusUpdateEvent taskStatusUpdateEvent = firstResponse.get();
         String taskId = taskStatusUpdateEvent.getTaskId() + "";
-        File logFile = new File(logFolder, "console-" + taskId + ".log");
+
+        Supplier<Boolean> completedStatusReceived = () -> {
+            for (TaskStatusUpdateEvent event : responses) {
+                if (event.getNewStatus().equals(Status.COMPLETED)) {
+                    log.debug("Found completed status for task {}", event.getTaskId());
+                    return true;
+                }
+            }
+            return false;
+        };
+        Wait.forCondition(completedStatusReceived, 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+
+        assertTestCommandOutputIsWrittenToLog(taskId);
+    }
+
+    private void assertTestCommandOutputIsWrittenToLog(String taskId) {
         Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
 
-        String fileContent = new String(Files.readAllBytes(logFile.toPath()));
-        Assert.assertTrue("Missing executed command in log file.", fileContent.contains(TEST_COMMAND));
-        Assert.assertTrue("Missing response message in log file.", fileContent.contains("Hello again"));
-        Assert.assertTrue("Missing or invalid completion state.", fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()));
+        String fileContent;
+        try {
+            fileContent = new String(Files.readAllBytes(logFile.toPath()));
+        } catch (IOException e) {
+            throw new AssertionError("Cannot read log file.", e);
+        }
+        Assert.assertTrue("Missing executed command in log file of task " + taskId + ".", fileContent.contains(TEST_COMMAND));
+        Assert.assertTrue("Missing response message in log file of task " + taskId + ".", fileContent.contains("Hello again"));
+        Assert.assertTrue("Missing final line in the log file of task " + taskId + ".", fileContent.contains("I'm done."));
+        Assert.assertTrue("Missing or invalid completion state of task " + taskId + ".", fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()));
     }
 
     private String readUrl(String host, int port, String path) throws IOException {

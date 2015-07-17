@@ -36,7 +36,6 @@ import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.servlet.Download;
 import org.jboss.pnc.buildagent.servlet.Upload;
 import org.jboss.pnc.buildagent.servlet.Welcome;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,9 +43,11 @@ import javax.servlet.ServletException;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -66,15 +67,17 @@ public class UndertowBootstrap {
 
     final String host;
     final int port;
-    final BuildAgent termdHandler;
+    final BuildAgent buildAgent;
     private final Executor executor = Executors.newFixedThreadPool(1);
     private final Collection<PtyMaster> runningTasks;
     private Undertow server;
+    private Map<String, TerminalSession> activeSessions = new HashMap<>();
+    TerminalSession terminalSession;
 
-    public UndertowBootstrap(String host, int port, BuildAgent termdHandler, Collection runningTasks) {
+    public UndertowBootstrap(String host, int port, BuildAgent buildAgent, Collection runningTasks) {
         this.host = host;
         this.port = port;
-        this.termdHandler = termdHandler;
+        this.buildAgent = buildAgent;
         this.runningTasks = runningTasks;
     }
 
@@ -125,12 +128,23 @@ public class UndertowBootstrap {
     private void handleWebSocketRequests(HttpServerExchange exchange) throws Exception {
         String requestPath = exchange.getRequestPath();
 
-        if (requestPath.equals("/socket/term")) {
-            getWebSocketHandler().handleRequest(exchange);
+        if (requestPath.startsWith("/socket/term")) {
+            Deque<String> context = exchange.getQueryParameters().get("context");
+            String invokerContext = "";
+            if (context != null) invokerContext = context.getFirst();
+
+            Deque<String> sessionIds = exchange.getQueryParameters().get("sessionId");
+            Optional<String> sessionId = Optional.empty();
+            if (sessionIds != null) sessionId = Optional.of(sessionIds.getFirst());
+
+            getWebSocketHandler(invokerContext, sessionId).handleRequest(exchange);
             return;
         }
-        if (requestPath.equals("/socket/process-status-updates")) {
-            webSocketStatusUpdateHandler().handleRequest(exchange);
+        if (requestPath.startsWith("/socket/process-status-updates")) {
+            Deque<String> context = exchange.getQueryParameters().get("context");
+            String invokerContext = "";
+            if (context != null) invokerContext = context.getFirst();
+            webSocketStatusUpdateHandler(invokerContext).handleRequest(exchange);
             return;
         }
     }
@@ -156,17 +170,35 @@ public class UndertowBootstrap {
         };
     }
 
-    private HttpHandler getWebSocketHandler() {
-        WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
-            WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, executor);
-            termdHandler.getPtyBootstrap().accept(conn);
+    private HttpHandler getWebSocketHandler(String invokerContext, Optional<String> sessionId) {
+        WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
+            if (sessionId.isPresent()) {
+                //TODO Optional<TerminalSession> sessionCandidate = activeSessions.values().stream().findFirst();
+                //if (sessionCandidate.isPresent()) {
+                //    sessionCandidate.get().addListener(webSocketChannel);
+                //} else {
+                //    log.warn("Client is trying to connect to non existing session.");
+                //}
+                terminalSession.addListener(webSocketChannel);
+            } else {
+                terminalSession = new TerminalSession(buildAgent.getLogFolder());
+                //activeSessions.put(terminalSession.getId(), terminalSession); //TODO destroy and remove session when there is no connection and no running task
+
+                WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, terminalSession, executor);
+                terminalSession.addListener(webSocketChannel);
+                buildAgent.getPtyBootstrap().accept(conn);
+
+                webSocketChannel.addCloseTask(channel -> {
+                    terminalSession.removeListener(webSocketChannel);
+                });
+            }
         };
 
-        HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
+        HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(onWebSocketConnected);
         return webSocketHandshakeHandler;
     }
 
-    private HttpHandler webSocketStatusUpdateHandler() {
+    private HttpHandler webSocketStatusUpdateHandler(String invokerContext) {
         WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
             Consumer<PtyStatusEvent> statusUpdateListener = (statusUpdateEvent) -> {
                 Map<String, Object> statusUpdate = new HashMap<>();
@@ -185,8 +217,8 @@ public class UndertowBootstrap {
                 }
             };
             log.debug("Registering new status update listener {}.", statusUpdateListener);
-            termdHandler.addStatusUpdateListener(statusUpdateListener);
-            webSocketChannel.addCloseTask((task) -> termdHandler.removeStatusUpdateListener(statusUpdateListener));
+            buildAgent.addStatusUpdateListener(statusUpdateListener);
+            webSocketChannel.addCloseTask((task) -> buildAgent.removeStatusUpdateListener(statusUpdateListener));
         };
 
         HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
@@ -223,4 +255,7 @@ public class UndertowBootstrap {
         return result;
     }
 
+    public TerminalSession getTerminalSession() {
+        return terminalSession;
+    }
 }

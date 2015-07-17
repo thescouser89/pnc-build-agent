@@ -29,10 +29,14 @@ import java.util.function.Supplier;
 public class Wait {
 
     public static void forCondition(Supplier<Boolean> evaluationSupplier, long timeout, TemporalUnit timeUnit) throws InterruptedException, TimeoutException {
+        forCondition(evaluationSupplier, timeout, timeUnit, "");
+    }
+
+    public static void forCondition(Supplier<Boolean> evaluationSupplier, long timeout, TemporalUnit timeUnit, String failedMessage) throws InterruptedException, TimeoutException {
         LocalDateTime started = LocalDateTime.now();
         while (true) {
             if (started.plus(timeout, timeUnit).isBefore(LocalDateTime.now())) {
-                throw new TimeoutException("Condition was not satisfied in " + timeout + " " + timeUnit);
+                throw new TimeoutException(failedMessage + " Reached timeout " + timeout + " " + timeUnit);
             }
             if (evaluationSupplier.get()) {
                 break;

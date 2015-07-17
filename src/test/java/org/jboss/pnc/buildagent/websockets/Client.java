@@ -20,8 +20,9 @@ package org.jboss.pnc.buildagent.websockets;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jboss.pnc.buildagent.spi.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
+import org.jboss.pnc.buildagent.util.Wait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,10 @@ import javax.websocket.Session;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -161,7 +165,7 @@ public class Client {
     }
 
 
-    public static Client connectStatusListenerClient(String webSocketUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate) {
+    public static Client connectStatusListenerClient(String webSocketUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String context) {
         Client client = Client.initializeDefault();
         Consumer<String> responseConsumer = (text) -> {
             log.trace("Decoding response: {}", text);
@@ -186,26 +190,23 @@ public class Client {
         });
 
         try {
-            client.connect(webSocketUrl);
+            client.connect(webSocketUrl + "/?context=" + context);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
         return client;
     }
 
-    public static Client connectCommandExecutingClient(String webSocketUrl, String command, Consumer<String> onResponseData) {
-        ObjectWrapper<Boolean> testCommandExecuted = new ObjectWrapper<>(false);
+    public static Client connectCommandExecutingClient(String webSocketUrl, Optional<Consumer<String>> responseDataConsumer, String context, Optional<String> sessionId) throws InterruptedException, TimeoutException {
+        ObjectWrapper<Boolean> connected = new ObjectWrapper<>(false);
 
         Client client = Client.initializeDefault();
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
             if ("% ".equals(responseData)) { //TODO use events
-                if (!testCommandExecuted.get()) {
-                    testCommandExecuted.set(true);
-                    executeRemoteCommand(client, command);
-                }
+                connected.set(true);
             } else {
-                onResponseData.accept(responseData);
+                responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
             }
         };
         client.onBinaryMessage(responseConsumer);
@@ -213,15 +214,20 @@ public class Client {
         client.onClose(closeReason -> {
         });
 
+        String sessionIdParam = "";
+        if (sessionId.isPresent()) sessionIdParam = "&sessionId=" + sessionId;
+
+
         try {
-            client.connect(webSocketUrl);
+            client.connect(webSocketUrl + "/?context=" + context + sessionIdParam);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
+        Wait.forCondition(() -> connected.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
         return client;
     }
 
-    private static void executeRemoteCommand(Client client, String command) {
+    public static void executeRemoteCommand(Client client, String command) {
         log.info("Executing remote command ...");
         RemoteEndpoint.Basic remoteEndpoint = client.getRemoteEndpoint();
         String data = "{\"action\":\"read\",\"data\":\"" + command + "\\r\\n\"}";

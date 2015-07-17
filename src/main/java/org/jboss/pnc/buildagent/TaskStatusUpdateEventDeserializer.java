@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.jboss.pnc.buildagent.spi;
+package org.jboss.pnc.buildagent;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -37,6 +37,7 @@ class TaskStatusUpdateEventDeserializer extends JsonDeserializer<TaskStatusUpdat
         String taskId = node.get("taskId").asText();
         String oldStatus = node.get("oldStatus").asText();
         String newStatus = node.get("newStatus").asText();
+//        String context = node.get("context").asText();
 
         return new TaskStatusUpdateEvent(taskId, Status.valueOf(oldStatus), Status.valueOf(newStatus));
     }
