@@ -75,6 +75,11 @@ public class TerminalSessionIoLogger implements AutoCloseable {
 
 
     public void close() {
+        try {
+            stream.close();
+        } catch (IOException e) {
+            log.error("Cannot close log output stream.", e);
+        }
     }
 
     public Consumer<String> getInputLogger() {
