@@ -80,7 +80,7 @@ public class TestGetRunningProcesses {
 
         ObjectWrapper<Boolean> resultReceived = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
-            if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING) && context.equals(statusUpdateEvent.getContext())) {
+            if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING)) {
                 try {
                     HttpURLConnection afterExecution = retrieveProcessList();
                     Assert.assertEquals(afterExecution.getResponseMessage(), 200, afterExecution.getResponseCode());

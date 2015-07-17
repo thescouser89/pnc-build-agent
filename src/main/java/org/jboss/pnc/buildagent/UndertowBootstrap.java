@@ -184,7 +184,7 @@ public class UndertowBootstrap {
                 terminalSession = new TerminalSession(buildAgent.getLogFolder());
                 //activeSessions.put(terminalSession.getId(), terminalSession); //TODO destroy and remove session when there is no connection and no running task
 
-                WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, terminalSession, executor, invokerContext);
+                WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, terminalSession, executor);
                 terminalSession.addListener(webSocketChannel);
                 buildAgent.getPtyBootstrap().accept(conn);
 
@@ -201,23 +201,19 @@ public class UndertowBootstrap {
     private HttpHandler webSocketStatusUpdateHandler(String invokerContext) {
         WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
             Consumer<PtyStatusEvent> statusUpdateListener = (statusUpdateEvent) -> {
-                boolean isContextDefined = invokerContext != null && !invokerContext.equals("");
-                boolean isContextMatching = invokerContext.equals(statusUpdateEvent.getContext());
-                if (!isContextDefined || isContextMatching) {
-                    Map<String, Object> statusUpdate = new HashMap<>();
-                    statusUpdate.put("action", "status-update");
-                    TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
-                    statusUpdate.put("event", taskStatusUpdateEventWrapper);
+                Map<String, Object> statusUpdate = new HashMap<>();
+                statusUpdate.put("action", "status-update");
+                TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
+                statusUpdate.put("event", taskStatusUpdateEventWrapper);
 
-                    ObjectMapper objectMapper = new ObjectMapper();
-                    try {
-                        String message = objectMapper.writeValueAsString(statusUpdate);
-                        WebSockets.sendText(message, webSocketChannel, null);
-                    } catch (JsonProcessingException e) {
-                        log.error("Cannot write object to JSON", e);
-                        String errorMessage = "Cannot write object to JSON: " + e.getMessage();
-                        WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
-                    }
+                ObjectMapper objectMapper = new ObjectMapper();
+                try {
+                    String message = objectMapper.writeValueAsString(statusUpdate);
+                    WebSockets.sendText(message, webSocketChannel, null);
+                } catch (JsonProcessingException e) {
+                    log.error("Cannot write object to JSON", e);
+                    String errorMessage = "Cannot write object to JSON: " + e.getMessage();
+                    WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
                 }
             };
             log.debug("Registering new status update listener {}.", statusUpdateListener);

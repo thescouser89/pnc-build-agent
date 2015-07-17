@@ -42,20 +42,17 @@ public class TaskStatusUpdateEvent implements Serializable {
     private final String taskId;
     private final Status oldStatus;
     private final Status newStatus;
-    private final String context;
 
     public TaskStatusUpdateEvent(PtyStatusEvent taskStatusUpdateEvent) {
         taskId = taskStatusUpdateEvent.getProcess().getId() + "";
         oldStatus = taskStatusUpdateEvent.getOldStatus();
         newStatus = taskStatusUpdateEvent.getNewStatus();
-        context = taskStatusUpdateEvent.getContext();
     }
 
-    public TaskStatusUpdateEvent(String taskId, Status oldStatus, Status newStatus, String context) {
+    public TaskStatusUpdateEvent(String taskId, Status oldStatus, Status newStatus) {
         this.taskId = taskId;
         this.oldStatus = oldStatus;
         this.newStatus = newStatus;
-        this.context = context;
     }
 
     public String getTaskId() {
@@ -68,10 +65,6 @@ public class TaskStatusUpdateEvent implements Serializable {
 
     public Status getNewStatus() {
         return newStatus;
-    }
-
-    public String getContext() {
-        return context;
     }
 
     public String toString() {

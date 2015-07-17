@@ -37,8 +37,8 @@ class TaskStatusUpdateEventDeserializer extends JsonDeserializer<TaskStatusUpdat
         String taskId = node.get("taskId").asText();
         String oldStatus = node.get("oldStatus").asText();
         String newStatus = node.get("newStatus").asText();
-        String context = node.get("context").asText();
+//        String context = node.get("context").asText();
 
-        return new TaskStatusUpdateEvent(taskId, Status.valueOf(oldStatus), Status.valueOf(newStatus), context);
+        return new TaskStatusUpdateEvent(taskId, Status.valueOf(oldStatus), Status.valueOf(newStatus));
     }
 }

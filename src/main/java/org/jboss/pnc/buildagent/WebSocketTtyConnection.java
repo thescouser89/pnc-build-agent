@@ -51,8 +51,8 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
         executor.execute(task);
     }
 
-    public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, TerminalSession terminalSession, Executor executor, String context) {
-        super(context);
+    public WebSocketTtyConnection(final WebSocketChannel webSocketChannel, TerminalSession terminalSession, Executor executor) {
+        super();
         this.terminalSession = terminalSession;
         this.executor = executor;
         registerWebSocketChannelListener(webSocketChannel);

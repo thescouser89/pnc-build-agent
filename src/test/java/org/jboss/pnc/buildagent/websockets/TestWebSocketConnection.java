@@ -95,9 +95,7 @@ public class TestWebSocketConnection {
 
         List<TaskStatusUpdateEvent> remoteResponseStatuses = new ArrayList<>();
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
-            if (context.equals(statusUpdateEvent.getContext())) {
-                remoteResponseStatuses.add(statusUpdateEvent);
-            }
+            remoteResponseStatuses.add(statusUpdateEvent);
         };
         Client statusListenerClient = Client.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
 
@@ -124,7 +122,7 @@ public class TestWebSocketConnection {
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
-            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) && context.equals(statusUpdateEvent.getContext())) {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) ) {
                 assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
                 completed.set(true);
             }
@@ -150,7 +148,7 @@ public class TestWebSocketConnection {
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
-            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) && context.equals(statusUpdateEvent.getContext())) {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
                 completed.set(true);
             }
         };
