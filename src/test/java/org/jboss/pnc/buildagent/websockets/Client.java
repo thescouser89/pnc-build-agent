@@ -223,7 +223,7 @@ public class Client {
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
-        Wait.forCondition(() -> connected.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        Wait.forCondition(() -> connected.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
         return client;
     }
 

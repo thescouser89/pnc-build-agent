@@ -107,8 +107,8 @@ public class TestWebSocketConnection {
         Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponseData), context, Optional.empty());
         Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
 
-        assertThatResultWasReceived(remoteResponses, 5, ChronoUnit.SECONDS);
-        assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 5, ChronoUnit.SECONDS);
+        assertThatResultWasReceived(remoteResponses, 10, ChronoUnit.SECONDS);
+        assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 10, ChronoUnit.SECONDS);
         assertThatLogWasWritten(remoteResponseStatuses);
 
         commandExecutingClient.close();
@@ -131,11 +131,11 @@ public class TestWebSocketConnection {
 
         Client commandExecutingClient = Client.connectCommandExecutingClient(terminalUrl, Optional.empty(), context, Optional.empty());
         Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
-        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
         completed.set(false);
 
         Client.executeRemoteCommand(commandExecutingClient, TEST_COMMAND);
-        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
         completed.set(false);
 
         commandExecutingClient.close();
@@ -163,7 +163,7 @@ public class TestWebSocketConnection {
         };
         Client commandListeningClient = Client.connectCommandExecutingClient(terminalUrl, Optional.of(onResponse), context, Optional.of("reconnect"));
 
-        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
 
         Assert.assertTrue("Missing or invalid response: " + response.toString(), response.toString().contains("I'm done."));
 
@@ -216,7 +216,7 @@ public class TestWebSocketConnection {
             }
             return false;
         };
-        Wait.forCondition(completedStatusReceived, 5, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        Wait.forCondition(completedStatusReceived, 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
 
         assertTestCommandOutputIsWrittenToLog(taskId);
     }
