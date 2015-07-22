@@ -27,7 +27,7 @@
   </scm>
 
   <properties>
-    <version.io.termd>1.0.0-20150710.203255-25</version.io.termd>
+    <version.io.termd>1.0.0-20150722.065314-1</version.io.termd>
     <version.undertow-websockets-jsr>1.2.6.Final</version.undertow-websockets-jsr>
     <version.junit>4.11</version.junit>
     <version.org.slf4j>1.7.7</version.org.slf4j>
@@ -381,12 +381,31 @@
 
   <repositories>
     <repository>
+      <id>jboss-snapshot</id>
+      <url>https://repository.jboss.org/nexus/content/repositories/snapshots</url>
       <snapshots>
         <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+        <checksumPolicy>fail</checksumPolicy>
       </snapshots>
+    </repository>
+    <repository>
+      <id>maven-central</id>
+      <url>http://repo1.maven.org/maven</url>
+      <snapshots>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+        <checksumPolicy>fail</checksumPolicy>
+      </snapshots>
+    </repository>
+    <repository>
       <id>sonatype</id>
-      <name>sonatype</name>
       <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
+      <snapshots>
+        <enabled>false</enabled>
+        <updatePolicy>always</updatePolicy>
+        <checksumPolicy>fail</checksumPolicy>
+      </snapshots>
     </repository>
   </repositories>
 
