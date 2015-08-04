@@ -21,7 +21,6 @@ package org.jboss.pnc.buildagent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.PtyMaster;
-import io.termd.core.pty.PtyStatusEvent;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
@@ -187,7 +186,7 @@ public class UndertowBootstrap {
 
                 WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, terminalSession, executor);
                 terminalSession.addListener(webSocketChannel);
-                buildAgent.getPtyBootstrap().accept(conn);
+                buildAgent.newTtyConnection(conn);
                 log.debug("New session created and socket listener added to it.");
             }
             webSocketChannel.addCloseTask(channel -> {
@@ -201,7 +200,7 @@ public class UndertowBootstrap {
 
     private HttpHandler webSocketStatusUpdateHandler(String invokerContext) {
         WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
-            Consumer<PtyStatusEvent> statusUpdateListener = (statusUpdateEvent) -> {
+            Consumer<TaskStatusUpdateEvent> statusUpdateListener = (statusUpdateEvent) -> {
                 Map<String, Object> statusUpdate = new HashMap<>();
                 statusUpdate.put("action", "status-update");
                 TaskStatusUpdateEvent taskStatusUpdateEventWrapper = new TaskStatusUpdateEvent(statusUpdateEvent);
