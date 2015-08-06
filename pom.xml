@@ -413,15 +413,6 @@
       </snapshots>
     </repository>
     <repository>
-      <id>maven-central</id>
-      <url>http://repo1.maven.org/maven</url>
-      <snapshots>
-        <enabled>true</enabled>
-        <updatePolicy>always</updatePolicy>
-        <checksumPolicy>fail</checksumPolicy>
-      </snapshots>
-    </repository>
-    <repository>
       <id>sonatype</id>
       <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
       <snapshots>
