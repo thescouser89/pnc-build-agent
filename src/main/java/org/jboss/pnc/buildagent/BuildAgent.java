@@ -18,10 +18,9 @@
 
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.pty.PtyBootstrap;
 import io.termd.core.pty.PtyMaster;
-import io.termd.core.pty.PtyStatusEvent;
 import io.termd.core.pty.Status;
+import io.termd.core.pty.TtyBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -43,11 +43,9 @@ public class BuildAgent {
 
     Logger log = LoggerFactory.getLogger(BuildAgent.class);
 
-    PtyBootstrap ptyBootstrap;
-
     private final List<PtyMaster> runningTasks = new ArrayList<>();
 
-    private final Set<Consumer<PtyStatusEvent>> statusUpdateListeners = new HashSet<>();
+    private final Set<Consumer<TaskStatusUpdateEvent>> statusUpdateListeners = new HashSet<>();
     private Optional<Path> logFolder;
     private Charset charset = Charset.forName("UTF-8");
     private UndertowBootstrap undertowBootstrap;
@@ -55,11 +53,11 @@ public class BuildAgent {
     private String host;
     private int port;
 
-    public boolean addStatusUpdateListener(Consumer<PtyStatusEvent> statusUpdateListener) {
+    public boolean addStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
         return statusUpdateListeners.add(statusUpdateListener);
     }
 
-    public boolean removeStatusUpdateListener(Consumer<PtyStatusEvent> statusUpdateListener) {
+    public boolean removeStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
         return statusUpdateListeners.remove(statusUpdateListener);
     }
 
@@ -70,8 +68,6 @@ public class BuildAgent {
         this.port = portCandidate;
         this.host = host;
         this.logFolder = logFolder;
-
-        ptyBootstrap = new PtyBootstrap(onTaskCreated());
 
         undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
 
@@ -99,44 +95,43 @@ public class BuildAgent {
 
     private Consumer<PtyMaster> onTaskCreated() {
         return (ptyMaster) -> {
-            ptyMaster.setProcessInputConsumer(undertowBootstrap.getTerminalSession().getProcessInputConsumer());
-            ptyMaster.setProcessOutputConsumer(undertowBootstrap.getTerminalSession().getProcessOutputConsumer());
-
-            ptyMaster.setTaskStatusUpdateListener(onTaskStatusUpdate());
+            ptyMaster.setChangeHandler(onTaskStatusUpdate(ptyMaster));
             runningTasks.add(ptyMaster);
             undertowBootstrap.getTerminalSession().addTask(ptyMaster);
-
         };
     }
 
-    private Consumer<PtyStatusEvent> onTaskStatusUpdate() {
-        return (statusUpdateEvent) -> {
-            removeCompletedTask(statusUpdateEvent);
-            notifyStatusUpdated(statusUpdateEvent);
+    public void newTtyConnection(WebSocketTtyConnection conn) {
+        TtyBridge ttyBridge = new TtyBridge(conn)
+                .setProcessListener(onTaskCreated())
+                .setProcessStdinListener(undertowBootstrap.getTerminalSession().getProcessInputConsumer())
+                .setProcessStdoutListener(undertowBootstrap.getTerminalSession().getProcessOutputConsumer());
+        ttyBridge.readline();
+    }
+
+    private BiConsumer<Status, Status> onTaskStatusUpdate(PtyMaster ptyMaster) {
+        return (oldStatus, newStatus) -> {
+            switch (newStatus) {
+                case COMPLETED:
+                case FAILED:
+                case INTERRUPTED:
+                    removeCompletedTask(ptyMaster);
+
+            }
+            notifyStatusUpdated(new TaskStatusUpdateEvent(ptyMaster.getId() + "", oldStatus, newStatus));
         };
     }
 
-    private void removeCompletedTask(PtyStatusEvent statusUpdateEvent) {
-        Status newStatus = statusUpdateEvent.getNewStatus();
-        switch (newStatus) {
-            case COMPLETED:
-            case FAILED:
-            case INTERRUPTED:
-                PtyMaster task = statusUpdateEvent.getProcess();
-                undertowBootstrap.getTerminalSession().removeTask(task);
-                runningTasks.remove(task);
-        }
+    private void removeCompletedTask(PtyMaster task) {
+        undertowBootstrap.getTerminalSession().removeTask(task);
+        runningTasks.remove(task);
     }
 
-    void notifyStatusUpdated(PtyStatusEvent statusUpdateEvent) {
-        for (Consumer<PtyStatusEvent> statusUpdateListener : statusUpdateListeners) {
-            log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, statusUpdateEvent.getProcess().getId(), statusUpdateEvent.getNewStatus());
+    void notifyStatusUpdated(TaskStatusUpdateEvent statusUpdateEvent) {
+        for (Consumer<TaskStatusUpdateEvent> statusUpdateListener : statusUpdateListeners) {
+            log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, statusUpdateEvent.getTaskId(), statusUpdateEvent.getNewStatus());
             statusUpdateListener.accept(statusUpdateEvent);
         }
-    }
-
-    public PtyBootstrap getPtyBootstrap() {
-        return ptyBootstrap;
     }
 
     public void stop() {
@@ -155,4 +150,5 @@ public class BuildAgent {
     public Optional<Path> getLogFolder() {
         return logFolder;
     }
+
 }

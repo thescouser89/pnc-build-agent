@@ -23,7 +23,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import io.termd.core.pty.PtyStatusEvent;
 import io.termd.core.pty.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,8 +42,8 @@ public class TaskStatusUpdateEvent implements Serializable {
     private final Status oldStatus;
     private final Status newStatus;
 
-    public TaskStatusUpdateEvent(PtyStatusEvent taskStatusUpdateEvent) {
-        taskId = taskStatusUpdateEvent.getProcess().getId() + "";
+    public TaskStatusUpdateEvent(TaskStatusUpdateEvent taskStatusUpdateEvent) {
+        taskId = taskStatusUpdateEvent.getTaskId() + "";
         oldStatus = taskStatusUpdateEvent.getOldStatus();
         newStatus = taskStatusUpdateEvent.getNewStatus();
     }
