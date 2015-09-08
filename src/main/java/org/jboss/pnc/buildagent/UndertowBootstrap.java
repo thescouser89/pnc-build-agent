@@ -26,6 +26,7 @@ import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.PathHandler;
+import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.websockets.WebSocketConnectionCallback;
@@ -66,38 +67,39 @@ public class UndertowBootstrap {
 
     final String host;
     final int port;
+    private String contextPath;
     final BuildAgent buildAgent;
     private final Executor executor = Executors.newFixedThreadPool(1);
     private final Collection<PtyMaster> runningTasks;
     private Undertow server;
-    private Map<String, TerminalSession> activeSessions = new HashMap<>();
     TerminalSession terminalSession;
 
-    public UndertowBootstrap(String host, int port, BuildAgent buildAgent, Collection runningTasks) {
+    public UndertowBootstrap(String host, int port, String contextPath, BuildAgent buildAgent, Collection runningTasks) {
         this.host = host;
         this.port = port;
+        this.contextPath = contextPath;
         this.buildAgent = buildAgent;
         this.runningTasks = runningTasks;
     }
 
     public void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
 
-        String servletPath = "/servlet";
-        String socketPath = "/socket";
-        String httpPath = "/";
+        String servletPath = contextPath + "/servlet";
+        String socketPath = contextPath + "/socket";
+        String httpPath = contextPath + "/";
 
         DeploymentInfo servletBuilder = deployment()
                 .setClassLoader(UndertowBootstrap.class.getClassLoader())
-                .setContextPath(servletPath)
+                .setContextPath("/")
                 .setDeploymentName("ROOT.war")
                 .addServlets(
                         servlet("WelcomeServlet", Welcome.class)
-                                .addMapping("/")
-                                .addMapping("/index*"),
+                                .addMapping(contextPath + "/")
+                                .addMapping(contextPath + "/index*"),
                         servlet("UploaderServlet", Upload.class)
-                                .addMapping("/upload/*"),
+                                .addMapping(contextPath + "/upload/*"),
                         servlet("DownloaderServlet", Download.class)
-                                .addMapping("/download/*"));
+                                .addMapping(contextPath + "/download/*"));
 
         DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
         manager.deploy();
@@ -111,8 +113,8 @@ public class UndertowBootstrap {
 
         PathHandler pathHandler = Handlers.path(Handlers.redirect(servletPath))
                 .addPrefixPath(servletPath, servletHandler)
-                .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleWebSocketRequests(exchange))
-                .addPrefixPath(httpPath, exchange -> UndertowBootstrap.this.handleHttpRequests(exchange));
+                .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleWebSocketRequests(exchange, socketPath))
+                .addPrefixPath(httpPath, exchange -> UndertowBootstrap.this.handleHttpRequests(exchange, httpPath));
 
         server = Undertow.builder()
                 .addHttpListener(port, host)
@@ -124,10 +126,10 @@ public class UndertowBootstrap {
         completionHandler.accept(true);
     }
 
-    private void handleWebSocketRequests(HttpServerExchange exchange) throws Exception {
+    private void handleWebSocketRequests(HttpServerExchange exchange, String socketPath) throws Exception {
         String requestPath = exchange.getRequestPath();
 
-        if (requestPath.startsWith("/socket/term")) {
+        if (requestPath.startsWith(socketPath + "/term")) {
             Deque<String> context = exchange.getQueryParameters().get("context");
             String invokerContext = "";
             if (context != null) invokerContext = context.getFirst();
@@ -139,7 +141,7 @@ public class UndertowBootstrap {
             getWebSocketHandler(invokerContext, sessionId).handleRequest(exchange);
             return;
         }
-        if (requestPath.startsWith("/socket/process-status-updates")) {
+        if (requestPath.startsWith(socketPath + "/process-status-updates")) {
             Deque<String> context = exchange.getQueryParameters().get("context");
             String invokerContext = "";
             if (context != null) invokerContext = context.getFirst();
@@ -148,16 +150,22 @@ public class UndertowBootstrap {
         }
     }
 
-    private void handleHttpRequests(HttpServerExchange exchange) throws Exception {
+    private void handleHttpRequests(HttpServerExchange exchange, String httpPath) throws Exception {
         String requestPath = exchange.getRequestPath();
-        if (requestPath.equals("/")) {
+
+        if (pathMatches(requestPath, httpPath)) {
             exchange.getResponseSender().send("Welcome to PNC Build Agent (" + getManifestInformation() + ')');
             return;
         }
-        if (requestPath.equals("/processes")) {
+        if (pathMatches(requestPath, httpPath + "processes")) {
             getProcessStatusHandler().handleRequest(exchange);
             return;
         }
+        ResponseCodeHandler.HANDLE_404.handleRequest(exchange);
+    }
+
+    private boolean pathMatches(String requestPath, String path) {
+        return requestPath.equals(path) || (requestPath + "/").equals(path);
     }
 
     private HttpHandler getProcessStatusHandler() {

@@ -61,7 +61,7 @@ public class BuildAgent {
         return statusUpdateListeners.remove(statusUpdateListener);
     }
 
-    public void start(String host, int portCandidate, Optional<Path> logFolder, final Runnable onStart) throws InterruptedException, BuildAgentException {
+    public void start(String host, int portCandidate, String contextPath, Optional<Path> logFolder, final Runnable onStart) throws InterruptedException, BuildAgentException {
         if(portCandidate == 0) {
             portCandidate = findFirstFreePort();
         }
@@ -69,7 +69,7 @@ public class BuildAgent {
         this.host = host;
         this.logFolder = logFolder;
 
-        undertowBootstrap = new UndertowBootstrap(host, port, this, runningTasks);
+        undertowBootstrap = new UndertowBootstrap(host, port, contextPath, this, runningTasks);
 
         undertowBootstrap.bootstrap(new Consumer<Boolean>() {
             @Override
