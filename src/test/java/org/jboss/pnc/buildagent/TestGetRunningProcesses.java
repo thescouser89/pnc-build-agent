@@ -57,7 +57,7 @@ public class TestGetRunningProcesses {
 
     @BeforeClass
     public static void setUP() throws Exception {
-        TermdServer.startServer(HOST, PORT);
+        TermdServer.startServer(HOST, PORT, "");
     }
 
     @AfterClass
