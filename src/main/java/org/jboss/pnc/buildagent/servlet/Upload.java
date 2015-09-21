@@ -18,6 +18,9 @@
 
 package org.jboss.pnc.buildagent.servlet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.servlet.ServletException;
 import javax.servlet.ServletInputStream;
 import javax.servlet.http.HttpServlet;
@@ -30,6 +33,9 @@ import java.io.IOException;
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public class Upload extends HttpServlet {
+
+    Logger log = LoggerFactory.getLogger(Upload.class);
+
 
     @Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -51,11 +57,14 @@ public class Upload extends HttpServlet {
             }
         }
 
+        log.debug("Upload completed.");
+
         if (totalBytes != fileSize) {
+            log.error("Did not received complete file! Expected {} length received {} length.", fileSize, totalBytes);
             response.sendError(500, "Did not received complete file!");
         } else {
+            log.info("Successfully uploaded {}.", fileDestination);
             response.setStatus(200);
         }
-
     }
 }
