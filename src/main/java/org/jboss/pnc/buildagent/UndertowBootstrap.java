@@ -90,16 +90,16 @@ public class UndertowBootstrap {
 
         DeploymentInfo servletBuilder = deployment()
                 .setClassLoader(UndertowBootstrap.class.getClassLoader())
-                .setContextPath("/")
+                .setContextPath(servletPath)
                 .setDeploymentName("ROOT.war")
                 .addServlets(
                         servlet("WelcomeServlet", Welcome.class)
-                                .addMapping(contextPath + "/")
-                                .addMapping(contextPath + "/index*"),
+                                .addMapping("/")
+                                .addMapping("/index*"),
                         servlet("UploaderServlet", Upload.class)
-                                .addMapping(contextPath + "/upload/*"),
+                                .addMapping("/upload/*"),
                         servlet("DownloaderServlet", Download.class)
-                                .addMapping(contextPath + "/download/*"));
+                                .addMapping("/download/*"));
 
         DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
         manager.deploy();
@@ -111,7 +111,7 @@ public class UndertowBootstrap {
             throw new BuildAgentException("Cannot deploy servlets.", e);
         }
 
-        PathHandler pathHandler = Handlers.path(Handlers.redirect(servletPath))
+        PathHandler pathHandler = Handlers.path()
                 .addPrefixPath(servletPath, servletHandler)
                 .addPrefixPath(socketPath, exchange -> UndertowBootstrap.this.handleWebSocketRequests(exchange, socketPath))
                 .addPrefixPath(httpPath, exchange -> UndertowBootstrap.this.handleHttpRequests(exchange, httpPath));
