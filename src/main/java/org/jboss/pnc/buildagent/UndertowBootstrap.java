@@ -154,10 +154,12 @@ public class UndertowBootstrap {
         String requestPath = exchange.getRequestPath();
 
         if (pathMatches(requestPath, httpPath)) {
+            log.debug("Welcome handler requested.");
             exchange.getResponseSender().send("Welcome to PNC Build Agent (" + getManifestInformation() + ')');
             return;
         }
         if (pathMatches(requestPath, httpPath + "processes")) {
+            log.debug("Processes handler requested.");
             getProcessStatusHandler().handleRequest(exchange);
             return;
         }

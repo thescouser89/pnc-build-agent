@@ -36,9 +36,9 @@ public class Upload extends HttpServlet {
 
     Logger log = LoggerFactory.getLogger(Upload.class);
 
-
     @Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        log.debug("Received new file upload request.");
         int fileSize = request.getContentLength();
         String fileDestination = request.getPathInfo();
         if (!fileDestination.startsWith("/")) {

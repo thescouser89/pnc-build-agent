@@ -18,6 +18,9 @@
 
 package org.jboss.pnc.buildagent.servlet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -30,8 +33,11 @@ import java.io.PrintWriter;
  */
 public class Welcome extends HttpServlet {
 
+    Logger log = LoggerFactory.getLogger(Welcome.class);
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        log.debug("Welcome servlet requested.");
         PrintWriter out = response.getWriter();
         out.print("Welcome to PNC Build Agent. Your request was handled by servlet handler.");
         out.close();

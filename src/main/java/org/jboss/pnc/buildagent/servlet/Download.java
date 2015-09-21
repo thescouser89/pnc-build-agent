@@ -39,6 +39,8 @@ public class Download extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        log.debug("Download servlet requested.");
+
         String fileLocation = request.getPathInfo();
         File file = new File(fileLocation);
         if (file.isDirectory() || !file.exists()) {
