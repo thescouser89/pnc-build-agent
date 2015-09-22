@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent;
 
+import org.jboss.pnc.buildagent.util.OutputStreamStringWritter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +41,7 @@ public class TerminalSessionIoLogger implements Closeable {
     private Consumer<int[]> outputLogger;
 
     FileOutputStream stream;
+    OutputStreamStringWritter loggingOutputStream = new OutputStreamStringWritter((string) -> log.debug(string));
 
     public TerminalSessionIoLogger(Path logFolder) {
         Optional<FileOutputStream> fileOutputStream = Optional.empty();
@@ -53,7 +55,9 @@ public class TerminalSessionIoLogger implements Closeable {
             inputLogger = (line) -> {
                 try {
                     String command = "% " + line + "\r\n";
-                    stream.write(command.getBytes(charset));
+                    byte[] bytes = command.getBytes(charset);
+                    stream.write(bytes);
+                    loggingOutputStream.write(bytes);
                 } catch (IOException e) {
                     log.error("Cannot write command line to log file.", e);
                 }
@@ -63,6 +67,7 @@ public class TerminalSessionIoLogger implements Closeable {
                 for (int anInt : ints) {
                     try {
                         stream.write(anInt);
+                        loggingOutputStream.write(anInt);
                     } catch (IOException e) {
                         log.error("Cannot write output to file.", e);
                     }
@@ -78,6 +83,7 @@ public class TerminalSessionIoLogger implements Closeable {
     public void close() {
         try {
             stream.close();
+            loggingOutputStream.close();
         } catch (IOException e) {
             log.error("Cannot close log output stream.", e);
         }
@@ -93,7 +99,9 @@ public class TerminalSessionIoLogger implements Closeable {
 
     public void write(String message) {
         try {
-            stream.write(message.getBytes(charset));
+            byte[] bytes = message.getBytes(charset);
+            stream.write(bytes);
+            loggingOutputStream.write(bytes);
         } catch (IOException e) {
             log.error("cannot write message: " + message + " to log.", e);
         }
