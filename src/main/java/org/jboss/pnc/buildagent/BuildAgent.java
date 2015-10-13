@@ -18,71 +18,57 @@
 
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.pty.PtyMaster;
-import io.termd.core.pty.Status;
-import io.termd.core.pty.TtyBridge;
+import org.jboss.pnc.buildagent.termserver.ReadOnlyChannel;
+import org.jboss.pnc.buildagent.termserver.UndertowBootstrap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.nio.charset.Charset;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
- */
+  */
 public class BuildAgent {
 
     Logger log = LoggerFactory.getLogger(BuildAgent.class);
-
-    private final List<PtyMaster> runningTasks = new ArrayList<>();
-
-    private final Set<Consumer<TaskStatusUpdateEvent>> statusUpdateListeners = new HashSet<>();
-    private Optional<Path> logFolder;
-    private Charset charset = Charset.forName("UTF-8");
     private UndertowBootstrap undertowBootstrap;
+    IoLoggerChannel ioLoggerChannel;
+    private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
 
-    private String host;
-    private int port;
-
-    public boolean addStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
-        return statusUpdateListeners.add(statusUpdateListener);
-    }
-
-    public boolean removeStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
-        return statusUpdateListeners.remove(statusUpdateListener);
-    }
-
-    public void start(String host, int portCandidate, String contextPath, Optional<Path> logFolder, final Runnable onStart) throws InterruptedException, BuildAgentException {
-        if(portCandidate == 0) {
-            portCandidate = findFirstFreePort();
+    public void start(String host, final int port, String contextPath, Optional<Path> logPath, Runnable onStart) {
+        final int bindPort;
+        if (port == 0) {
+            bindPort = findFirstFreePort();
+        } else {
+            bindPort = port;
         }
-        this.port = portCandidate;
-        this.host = host;
-        this.logFolder = logFolder;
 
-        undertowBootstrap = new UndertowBootstrap(host, port, contextPath, this, runningTasks);
+        Optional<ReadOnlyChannel> ioLoggerChannelWrapper;
+        if (logPath.isPresent()) {
+            ioLoggerChannel = new IoLoggerChannel(logPath.get());
+            ioLoggerChannelWrapper = Optional.of(ioLoggerChannel);
+        } else {
+            ioLoggerChannelWrapper = Optional.empty();
+        }
 
-        undertowBootstrap.bootstrap(new Consumer<Boolean>() {
-            @Override
-            public void accept(Boolean event) {
-                if (event) {
-                    System.out.println("Server started on " + host + ":" + port);
-                    if (onStart != null)
-                        onStart.run();
-                } else {
-                    System.out.println("Could not start");
+        undertowBootstrap = new BootstrapUndertowBuildAgentHandlers(host, bindPort, executor, contextPath, ioLoggerChannelWrapper);
+
+        undertowBootstrap.bootstrap(completionHandler -> {
+            if (completionHandler) {
+                log.info("Server started on " + host + ":" + port);
+                if (onStart != null) {
+                    onStart.run();
                 }
+            } else {
+                log.info("Could not start server");
             }
         });
+
     }
 
     private int findFirstFreePort() {
@@ -93,62 +79,19 @@ public class BuildAgent {
         }
     }
 
-    private Consumer<PtyMaster> onTaskCreated() {
-        return (ptyMaster) -> {
-            ptyMaster.setChangeHandler(onTaskStatusUpdate(ptyMaster));
-            runningTasks.add(ptyMaster);
-            undertowBootstrap.getTerminalSession().addTask(ptyMaster);
-        };
+
+    public int getPort() {
+        return undertowBootstrap.getPort();
     }
 
-    public void newTtyConnection(WebSocketTtyConnection conn) {
-        TtyBridge ttyBridge = new TtyBridge(conn)
-                .setProcessListener(onTaskCreated())
-                .setProcessStdinListener(undertowBootstrap.getTerminalSession().getProcessInputConsumer())
-                .setProcessStdoutListener(undertowBootstrap.getTerminalSession().getProcessOutputConsumer());
-        ttyBridge.readline();
-    }
-
-    private BiConsumer<Status, Status> onTaskStatusUpdate(PtyMaster ptyMaster) {
-        return (oldStatus, newStatus) -> {
-            switch (newStatus) {
-                case COMPLETED:
-                case FAILED:
-                case INTERRUPTED:
-                    removeCompletedTask(ptyMaster);
-
-            }
-            notifyStatusUpdated(new TaskStatusUpdateEvent(ptyMaster.getId() + "", oldStatus, newStatus));
-        };
-    }
-
-    private void removeCompletedTask(PtyMaster task) {
-        undertowBootstrap.getTerminalSession().removeTask(task);
-        runningTasks.remove(task);
-    }
-
-    void notifyStatusUpdated(TaskStatusUpdateEvent statusUpdateEvent) {
-        for (Consumer<TaskStatusUpdateEvent> statusUpdateListener : statusUpdateListeners) {
-            log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, statusUpdateEvent.getTaskId(), statusUpdateEvent.getNewStatus());
-            statusUpdateListener.accept(statusUpdateEvent);
-        }
+    public String getHost() {
+        return undertowBootstrap.getHost();
     }
 
     public void stop() {
         undertowBootstrap.stop();
-        System.out.println("Server stopped");
+        if (ioLoggerChannel != null) {
+            ioLoggerChannel.close();
+        }
     }
-
-    public String getHost() {
-        return host;
-    }
-
-    public int getPort() {
-        return port;
-    }
-
-    public Optional<Path> getLogFolder() {
-        return logFolder;
-    }
-
 }

@@ -19,6 +19,7 @@
 package org.jboss.pnc.buildagent;
 
 import io.termd.core.pty.Status;
+import org.jboss.pnc.buildagent.termserver.TaskStatusUpdateEvent;
 import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -36,9 +37,8 @@ public class TaskStatusUpdateEventSerialization {
     @Test
     public void testTaskStatusUpdateEventSerialization() throws IOException {
 
-        TaskStatusUpdateEvent termTaskStatusUpdateEvent = new TaskStatusUpdateEvent("123456", Status.NEW, Status.RUNNING);
+        TaskStatusUpdateEvent taskStatusUpdateEvent = new TaskStatusUpdateEvent("123456", Status.NEW, Status.RUNNING, "ctx");
 
-        TaskStatusUpdateEvent taskStatusUpdateEvent = new TaskStatusUpdateEvent(termTaskStatusUpdateEvent);
         String taskId = taskStatusUpdateEvent.getTaskId();
 
         String serialized = taskStatusUpdateEvent.toString();

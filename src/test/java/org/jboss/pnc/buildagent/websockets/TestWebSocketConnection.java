@@ -21,7 +21,7 @@ package org.jboss.pnc.buildagent.websockets;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.MockProcess;
 import org.jboss.pnc.buildagent.TermdServer;
-import org.jboss.pnc.buildagent.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.termserver.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.junit.AfterClass;
@@ -207,7 +207,7 @@ public class TestWebSocketConnection {
         Supplier<Boolean> completedStatusReceived = () -> {
             for (TaskStatusUpdateEvent event : responses) {
                 if (event.getNewStatus().equals(Status.COMPLETED)) {
-                    log.debug("Found completed status for task {}", event.getTaskId());
+                    log.debug("Found received completed status for task {}", event.getTaskId());
                     return true;
                 }
             }

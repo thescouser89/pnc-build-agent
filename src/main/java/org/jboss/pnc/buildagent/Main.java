@@ -65,7 +65,7 @@ public class Main {
             logPath = Optional.empty();
         }
         String contextPath = getOption(cmd, "c", "");
-        new BuildAgent().start(host, port, contextPath, logPath, null);
+        new BuildAgent().start(host, port, contextPath, logPath, () -> {});
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {

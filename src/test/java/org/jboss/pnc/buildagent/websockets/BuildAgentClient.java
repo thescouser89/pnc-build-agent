@@ -20,7 +20,7 @@ package org.jboss.pnc.buildagent.websockets;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.jboss.pnc.buildagent.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.termserver.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.slf4j.Logger;
