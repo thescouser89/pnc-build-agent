@@ -95,6 +95,10 @@ public class BuildAgent {
         return undertowBootstrap.getPort();
     }
 
+    public String getHost() {
+        return undertowBootstrap.getHost();
+    }
+
     public void stop() {
         undertowBootstrap.stop();
         if (ioLoggerChannel != null) {
