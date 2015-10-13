@@ -21,6 +21,7 @@ package org.jboss.pnc.buildagent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.Status;
+import org.jboss.pnc.buildagent.termserver.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.jboss.pnc.buildagent.websockets.BuildAgentClient;

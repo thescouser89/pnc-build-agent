@@ -21,7 +21,7 @@ package org.jboss.pnc.buildagent.websockets;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.MockProcess;
 import org.jboss.pnc.buildagent.TermdServer;
-import org.jboss.pnc.buildagent.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.termserver.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.util.ObjectWrapper;
 import org.jboss.pnc.buildagent.util.Wait;
 import org.junit.AfterClass;

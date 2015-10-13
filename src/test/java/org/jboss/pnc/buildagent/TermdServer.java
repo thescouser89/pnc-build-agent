@@ -59,14 +59,8 @@ public class TermdServer {
         };
         mutex.acquire();
         serverThread = new Thread(() -> {
-            try {
-                Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
-                new BuildAgent().start(host, port, contextPath, logFolder, onStart);
-            } catch (InterruptedException e) {
-                log.error("Server was interrupted", e);
-            } catch (BuildAgentException e) {
-                log.error("Cannot start server.", e);
-            }
+            Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
+            new BuildAgent().start(host, port, contextPath, logFolder, onStart);
         }, "termd-serverThread-thread");
         serverThread.start();
 

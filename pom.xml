@@ -27,7 +27,7 @@
   </scm>
 
   <properties>
-    <version.io.termd>1.0.0-20150908</version.io.termd>
+    <version.io.termd>1.0.0</version.io.termd>
     <version.undertow-websockets-jsr>1.2.6.Final</version.undertow-websockets-jsr>
     <version.junit>4.11</version.junit>
     <version.org.slf4j>1.7.7</version.org.slf4j>
@@ -49,6 +49,28 @@
         <groupId>io.termd</groupId>
         <artifactId>termd-core</artifactId>
         <version>${version.io.termd}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-common</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-buffer</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec-http</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <dependency>

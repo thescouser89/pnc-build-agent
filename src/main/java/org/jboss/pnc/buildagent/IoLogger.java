@@ -32,16 +32,16 @@ import java.util.function.Consumer;
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
  */
-public class TerminalSessionIoLogger implements Closeable {
+public class IoLogger implements Closeable {
 
-    Logger log = LoggerFactory.getLogger(TerminalSessionIoLogger.class);
+    Logger log = LoggerFactory.getLogger(IoLogger.class);
     private Charset charset = Charset.defaultCharset();
     private Consumer<String> inputLogger;
     private Consumer<int[]> outputLogger;
 
     FileOutputStream stream;
 
-    public TerminalSessionIoLogger(Path logFolder) {
+    public IoLogger(Path logFolder) {
         Optional<FileOutputStream> fileOutputStream = Optional.empty();
 
         try {

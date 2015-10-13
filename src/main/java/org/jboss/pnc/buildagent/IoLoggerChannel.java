@@ -35,13 +35,13 @@ import java.util.function.Consumer;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class TerminalSession {
+public class IoLoggerChannel {
 
-    private static final Logger log = LoggerFactory.getLogger(TerminalSession.class);
+    private static final Logger log = LoggerFactory.getLogger(IoLoggerChannel.class);
 
     private String id;
 
-    Optional<TerminalSessionIoLogger> terminalSessionIoLogger = Optional.empty();
+    Optional<IoLogger> terminalSessionIoLogger = Optional.empty();
 
     private Set<WebSocketChannel> channelListeners = new HashSet<>();
 
@@ -56,12 +56,11 @@ public class TerminalSession {
     Consumer<int[]> processOutputConsumer = (ints) -> {
         processOutputConsumers.forEach(consumer -> consumer.accept(ints));
     };
-    private Set<PtyMaster> tasks = new HashSet<>();
 
-    public TerminalSession(Optional<Path> logPath) {
+    public IoLoggerChannel(Optional<Path> logPath) {
         id = UUID.randomUUID().toString();
         logPath.ifPresent(path -> {
-            TerminalSessionIoLogger ioLogger = new TerminalSessionIoLogger(path);
+            IoLogger ioLogger = new IoLogger(path);
             terminalSessionIoLogger = Optional.of(ioLogger);
             processInputConsumers.add(ioLogger.getInputLogger()); //TODO remove
             processOutputConsumers.add(ioLogger.getOutputLogger());
@@ -92,21 +91,7 @@ public class TerminalSession {
         return processOutputConsumer;
     }
 
-    public void addTask(PtyMaster task) {
-        tasks.add(task);
-    }
-
-    public void removeTask(PtyMaster task) {
-        tasks.remove(task);
-        if (tasks.isEmpty()) {
-            terminalSessionIoLogger.ifPresent(ioLogger -> {
-                finalizeLog(ioLogger, task);
-                //ioLogger.close(); //TODO close
-            });
-        }
-    }
-
-    private void finalizeLog(TerminalSessionIoLogger ioLogger, PtyMaster task) {
+    private void finalizeLog(IoLogger ioLogger, PtyMaster task) {
         String completed = "% # Finished with status: " + task.getStatus() + "\r\n";
         ioLogger.write(completed);
     }
