@@ -18,28 +18,17 @@
 
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.pty.PtyMaster;
-import io.termd.core.pty.Status;
-import io.termd.core.pty.TtyBridge;
-import org.jboss.pnc.buildagent.termserver.*;
+import org.jboss.pnc.buildagent.termserver.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.termserver.UndertowBootstrap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.nio.charset.Charset;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.Semaphore;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
