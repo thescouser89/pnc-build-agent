@@ -207,7 +207,7 @@ public class TestWebSocketConnection {
         Supplier<Boolean> completedStatusReceived = () -> {
             for (TaskStatusUpdateEvent event : responses) {
                 if (event.getNewStatus().equals(Status.COMPLETED)) {
-                    log.debug("Found completed status for task {}", event.getTaskId());
+                    log.debug("Found received completed status for task {}", event.getTaskId());
                     return true;
                 }
             }

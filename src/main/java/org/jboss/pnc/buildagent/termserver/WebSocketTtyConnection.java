@@ -44,18 +44,14 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
   private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
   private WebSocketChannel webSocketChannel;
   private final ScheduledExecutorService executor;
-  private Set<WebSocketChannel> readonlyChannels = new HashSet<>();
+  private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
 
   @Override
   protected void write(byte[] buffer) {
     if (isOpen()) {
-      sendBinary(buffer, webSocketChannel);
+      WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
     }
-    readonlyChannels.forEach((wsChannel) -> sendBinary(buffer, wsChannel));
-  }
-
-  private void sendBinary(byte[] buffer, WebSocketChannel webSocketChannel) {
-    WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+    readonlyChannels.forEach((channel) -> channel.writeOutput(buffer));
   }
 
   @Override
@@ -105,11 +101,11 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
     this.webSocketChannel = webSocketChannel;
   }
 
-  public void addReadonlyChannel(WebSocketChannel webSocketChannel) {
+  public void addReadonlyChannel(ReadOnlyChannel webSocketChannel) {
     readonlyChannels.add(webSocketChannel);
   }
 
-  public void removeReadonlyChannel(WebSocketChannel webSocketChannel) {
+  public void removeReadonlyChannel(ReadOnlyChannel webSocketChannel) {
     readonlyChannels.remove(webSocketChannel);
   }
 

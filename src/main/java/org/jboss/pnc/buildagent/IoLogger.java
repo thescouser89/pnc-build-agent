@@ -37,7 +37,7 @@ public class IoLogger implements Closeable {
     Logger log = LoggerFactory.getLogger(IoLogger.class);
     private Charset charset = Charset.defaultCharset();
     private Consumer<String> inputLogger;
-    private Consumer<int[]> outputLogger;
+    private Consumer<byte[]> outputLogger;
 
     FileOutputStream stream;
 
@@ -59,13 +59,11 @@ public class IoLogger implements Closeable {
                 }
             };
 
-            outputLogger = (ints) -> {
-                for (int anInt : ints) {
-                    try {
-                        stream.write(anInt);
-                    } catch (IOException e) {
-                        log.error("Cannot write output to file.", e);
-                    }
+            outputLogger = (bytes) -> {
+                try {
+                    stream.write(bytes);
+                } catch (IOException e) {
+                    log.error("Cannot write output to file.", e);
                 }
             };
 
@@ -87,7 +85,7 @@ public class IoLogger implements Closeable {
         return inputLogger;
     }
 
-    public Consumer<int[]> getOutputLogger() {
+    public Consumer<byte[]> getOutputLogger() {
         return outputLogger;
     }
 

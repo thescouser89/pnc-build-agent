@@ -48,6 +48,7 @@ public class BuildAgent {
 
     Logger log = LoggerFactory.getLogger(BuildAgent.class);
     private UndertowBootstrap undertowBootstrap;
+    IoLoggerChannel ioLoggerChannel;
     private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
 
     public void start(String host, final int port, String contextPath, Optional<Path> logPath, Runnable onStart) {
@@ -58,7 +59,15 @@ public class BuildAgent {
             bindPort = port;
         }
 
-        undertowBootstrap = new BootstrapUndertowBuildAgentHandlers(host, bindPort, executor, contextPath);
+        Optional<ReadOnlyChannel> ioLoggerChannelWrapper;
+        if (logPath.isPresent()) {
+            ioLoggerChannel = new IoLoggerChannel(logPath.get());
+            ioLoggerChannelWrapper = Optional.of(ioLoggerChannel);
+        } else {
+            ioLoggerChannelWrapper = Optional.empty();
+        }
+
+        undertowBootstrap = new BootstrapUndertowBuildAgentHandlers(host, bindPort, executor, contextPath, ioLoggerChannelWrapper);
 
         undertowBootstrap.bootstrap(completionHandler -> {
             if (completionHandler) {
@@ -88,5 +97,8 @@ public class BuildAgent {
 
     public void stop() {
         undertowBootstrap.stop();
+        if (ioLoggerChannel != null) {
+            ioLoggerChannel.close();
+        }
     }
 }

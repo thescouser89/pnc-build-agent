@@ -21,16 +21,17 @@ package org.jboss.pnc.buildagent.termserver;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.PtyMaster;
+import io.termd.core.pty.Status;
 import io.termd.core.pty.TtyBridge;
 import io.undertow.server.HttpHandler;
 import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.CloseMessage;
-import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -53,11 +54,13 @@ class Term {
   private WebSocketTtyConnection webSocketTtyConnection;
   private boolean activeCommand;
   private ScheduledExecutorService executor;
+  private Optional<ReadOnlyChannel> appendReadOnlyChannel;
 
-  public Term(String context, Runnable onDestroy, ScheduledExecutorService executor) {
+  public Term(String context, Runnable onDestroy, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
     this.context = context;
     this.onDestroy = onDestroy;
     this.executor = executor;
+    this.appendReadOnlyChannel = appendReadOnlyChannel;
   }
 
   public void addStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
@@ -82,6 +85,7 @@ class Term {
     if (event.getNewStatus().isFinal()) {
       activeCommand = false;
       log.trace("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
+      writeCompltededToReadonlyChannel(event.getNewStatus());
       destroyIfInactiveAndDisconnected();
     } else {
       activeCommand = true;
@@ -92,6 +96,11 @@ class Term {
     }
   }
 
+  private void writeCompltededToReadonlyChannel(Status newStatus) {
+    String completed = "% # Finished with status: " + newStatus + "\r\n";
+    appendReadOnlyChannel.ifPresent(ch -> ch.writeOutput(completed.getBytes(Charset.forName("UTF-8"))));
+  }
+
   private void destroyIfInactiveAndDisconnected() {
     if (!activeCommand && !webSocketTtyConnection.isOpen()) {
       log.debug("Destroying Term as there is no running command and no active connection.");
@@ -99,11 +108,13 @@ class Term {
     }
   }
 
-  synchronized HttpHandler getWebSocketHandler(Optional<WebSocketChannel> logChannel) {
+  synchronized HttpHandler getWebSocketHandler() {
+    //TODO unify appendReadonlyChannel and webSocketTtyConnection.addReadonlyChannel
+    //TODO should we create new ttyConnection independent of webSockets and attach sockets later on
     WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
       if (webSocketTtyConnection == null) {
         webSocketTtyConnection = new WebSocketTtyConnection(webSocketChannel, executor);
-        logChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
+        appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
         webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeWebSocketChannel(); destroyIfInactiveAndDisconnected();});
         TtyBridge ttyBridge = new TtyBridge(webSocketTtyConnection);
         ttyBridge
@@ -111,8 +122,9 @@ class Term {
             .readline();
       } else {
         if (webSocketTtyConnection.isOpen()) {
-          webSocketTtyConnection.addReadonlyChannel(webSocketChannel);
-          webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeReadonlyChannel(webSocketChannel); destroyIfInactiveAndDisconnected();});
+          ReadOnlyChannel readOnlyChannel = new ReadOnlyWebSocketChannel(webSocketChannel);
+          webSocketTtyConnection.addReadonlyChannel(readOnlyChannel);
+          webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeReadonlyChannel(readOnlyChannel); destroyIfInactiveAndDisconnected();});
         } else {
           webSocketTtyConnection.setWebSocketChannel(webSocketChannel);
           webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeWebSocketChannel(); destroyIfInactiveAndDisconnected();});
@@ -145,9 +157,5 @@ class Term {
     };
 
     return new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
-  }
-
-  public String getContext() {
-    return context;
   }
 }

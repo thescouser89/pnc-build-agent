@@ -31,6 +31,7 @@ import io.undertow.websockets.core.WebSocketChannel;
 import org.jboss.pnc.buildagent.servlet.Download;
 import org.jboss.pnc.buildagent.servlet.Upload;
 import org.jboss.pnc.buildagent.servlet.Welcome;
+import org.jboss.pnc.buildagent.termserver.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.termserver.UndertowBootstrap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,8 +58,8 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
     Logger log = LoggerFactory.getLogger(BootstrapUndertowBuildAgentHandlers.class);
     private Undertow server;
 
-    public BootstrapUndertowBuildAgentHandlers(String host, int port, ScheduledExecutorService executor, String contextPath) {
-        super(host, port, executor, Optional.<WebSocketChannel>empty());
+    public BootstrapUndertowBuildAgentHandlers(String host, int port, ScheduledExecutorService executor, String contextPath, Optional<ReadOnlyChannel> ioLoggerChannel) {
+        super(host, port, executor, ioLoggerChannel);
 
         this.contextPath = contextPath;
     }

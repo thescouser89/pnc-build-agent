@@ -19,80 +19,43 @@
 package org.jboss.pnc.buildagent;
 
 import io.termd.core.pty.PtyMaster;
-import io.undertow.websockets.core.WebSocketChannel;
-import io.undertow.websockets.core.WebSockets;
+import org.jboss.pnc.buildagent.termserver.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.IntBuffer;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class IoLoggerChannel {
+public class IoLoggerChannel implements ReadOnlyChannel {
 
     private static final Logger log = LoggerFactory.getLogger(IoLoggerChannel.class);
 
-    private String id;
+    final IoLogger ioLogger;
 
-    Optional<IoLogger> terminalSessionIoLogger = Optional.empty();
-
-    private Set<WebSocketChannel> channelListeners = new HashSet<>();
-
-    private Set<Consumer<String>> processInputConsumers = new HashSet<>();
-    private Set<Consumer<int[]>> processOutputConsumers = new HashSet<>();
-
-    Consumer<String> processInputConsumer = (line) -> {
-        String command = "% " + line + "\r\n";
-        processInputConsumers.forEach(consumer -> consumer.accept(line));
-    };
-
-    Consumer<int[]> processOutputConsumer = (ints) -> {
-        processOutputConsumers.forEach(consumer -> consumer.accept(ints));
-    };
-
-    public IoLoggerChannel(Optional<Path> logPath) {
-        id = UUID.randomUUID().toString();
-        logPath.ifPresent(path -> {
-            IoLogger ioLogger = new IoLogger(path);
-            terminalSessionIoLogger = Optional.of(ioLogger);
-            processInputConsumers.add(ioLogger.getInputLogger()); //TODO remove
-            processOutputConsumers.add(ioLogger.getOutputLogger());
-        });
+    public IoLoggerChannel(Path logPath) {
+        ioLogger = new IoLogger(logPath);
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public void addListener(WebSocketChannel webSocketChannel) {
-        channelListeners.add(webSocketChannel);
-    }
-
-    public void removeListener(WebSocketChannel webSocketChannel) {
-        channelListeners.remove(webSocketChannel);
-    }
-
-    public void onTtyByte(byte[] buffer) {
-        channelListeners.forEach(webSocketChannel -> WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null));
-    }
-
-    public Consumer<String> getProcessInputConsumer() {
-        return processInputConsumer;
-    }
-
-    public Consumer<int[]> getProcessOutputConsumer() {
-        return processOutputConsumer;
-    }
-
-    private void finalizeLog(IoLogger ioLogger, PtyMaster task) {
+    public void finalizeLog(PtyMaster task) {
         String completed = "% # Finished with status: " + task.getStatus() + "\r\n";
         ioLogger.write(completed);
+    }
+
+    @Override
+    public void writeOutput(byte[] buffer) {
+        ioLogger.getOutputLogger().accept(buffer);
+    }
+
+    public void close() {
+        ioLogger.close();
     }
 }

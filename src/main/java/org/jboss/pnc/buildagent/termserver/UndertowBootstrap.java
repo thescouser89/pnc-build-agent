@@ -20,8 +20,6 @@ package org.jboss.pnc.buildagent.termserver;
 
 import io.undertow.Undertow;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.websockets.core.WebSocketChannel;
-import org.jboss.pnc.buildagent.BuildAgentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,13 +43,13 @@ public class UndertowBootstrap {
   private Undertow server;
   final ConcurrentHashMap<String, Term> terms = new ConcurrentHashMap<>();
   private ScheduledExecutorService executor;
-  private Optional<WebSocketChannel> additionalReadOnlyChannel;
+  private Optional<ReadOnlyChannel> appendReadOnlyChannel;
 
-  public UndertowBootstrap(String host, int port, ScheduledExecutorService executor, Optional<WebSocketChannel> additionalReadOnlyChannel) {
+  public UndertowBootstrap(String host, int port, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
     this.host = host;
     this.port = port;
     this.executor = executor;
-    this.additionalReadOnlyChannel = additionalReadOnlyChannel;
+    this.appendReadOnlyChannel = appendReadOnlyChannel;
   }
 
   public void bootstrap(final Consumer<Boolean> completionHandler) {
@@ -70,24 +68,24 @@ public class UndertowBootstrap {
     if (requestPath.startsWith(termPath)) {
       log.debug("Connecting to term ...");
       String invokerContext = requestPath.replace(termPath + "/", "");
-      Term term = getTerm(invokerContext);
-      term.getWebSocketHandler(additionalReadOnlyChannel).handleRequest(exchange);
+      Term term = getTerm(invokerContext, appendReadOnlyChannel);
+      term.getWebSocketHandler().handleRequest(exchange);
     } else  if (requestPath.startsWith(processUpdatePath)) {
       log.debug("Connecting status listener ...");
       String invokerContext = requestPath.replace(processUpdatePath + "/", "");
-      Term term = getTerm(invokerContext);
+      Term term = getTerm(invokerContext, appendReadOnlyChannel);
       term.webSocketStatusUpdateHandler().handleRequest(exchange);
     }
   }
 
-  private Term getTerm(String invokerContext) {
-    return terms.computeIfAbsent(invokerContext, ctx -> createNewTerm(invokerContext));
+  private Term getTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+    return terms.computeIfAbsent(invokerContext, ctx -> createNewTerm(invokerContext, appendReadOnlyChannel));
   }
 
-  protected Term createNewTerm(String invokerContext) {
+  protected Term createNewTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
     log.debug("Creating new term for context [{}].", invokerContext);
     Runnable onDestroy = () -> terms.remove(invokerContext);
-    Term term = new Term(invokerContext, onDestroy, executor);
+    Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannel);
 
     return term;
   }
