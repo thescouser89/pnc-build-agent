@@ -28,6 +28,7 @@ import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import org.jboss.pnc.buildagent.servlet.Download;
+import org.jboss.pnc.buildagent.servlet.Terminal;
 import org.jboss.pnc.buildagent.servlet.Upload;
 import org.jboss.pnc.buildagent.servlet.Welcome;
 import org.jboss.pnc.buildagent.termserver.ReadOnlyChannel;
@@ -75,8 +76,9 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
                 .setDeploymentName("ROOT.war")
                 .addServlets(
                         servlet("WelcomeServlet", Welcome.class)
-                                .addMapping("/")
-                                .addMapping("/index*"),
+                                .addMapping("/"),
+                        servlet("TerminalServlet", Terminal.class)
+                                .addMapping("/terminal/*"),
                         servlet("UploaderServlet", Upload.class)
                                 .addMapping("/upload/*"),
                         servlet("DownloaderServlet", Download.class)
@@ -117,7 +119,9 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
 
         if (pathMatches(requestPath, httpPath)) {
             log.debug("Welcome handler requested.");
-            exchange.getResponseSender().send("Welcome to PNC Build Agent (" + getManifestInformation() + ')');
+            String message = "Welcome to PNC Build Agent (" + getManifestInformation() + ")";
+            message += "\nVisit /servlet/terminal/ for demo console.";
+            exchange.getResponseSender().send(message);
             return;
         }
         if (pathMatches(requestPath, httpPath + "processes")) {
