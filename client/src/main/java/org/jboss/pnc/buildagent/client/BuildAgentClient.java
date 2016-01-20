@@ -66,7 +66,7 @@ public class BuildAgentClient implements Closeable {
     public void executeCommand(String command) {
         log.info("Executing remote command ...");
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
-        String data = "{\"action\":\"read\",\"data\":\"" + command + "\\r\\n\"}";
+        String data = "{\"action\":\"read\",\"data\":\"" + command + "\\n\"}";
         try {
             remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
         } catch (IOException e) {
@@ -113,8 +113,8 @@ public class BuildAgentClient implements Closeable {
 
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
-            log.trace("Checking for command line 'ready'(%) marker...");
             if ("% ".equals(responseData)) { //TODO use events
+                log.info("Received command line 'ready'(%) marker.");
                 connected.set(true);
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;

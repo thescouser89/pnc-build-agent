@@ -99,6 +99,7 @@ public class TestWebSocketConnection {
         List<String> remoteResponses = new ArrayList<>();
 
         Consumer<String> onResponseData = (responseData) -> {
+            log.debug("Adding to remote response list [{}].", responseData);
             remoteResponses.add(responseData);
         };
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.of(onResponseData), onStatusUpdate, context, Optional.empty());
@@ -167,10 +168,13 @@ public class TestWebSocketConnection {
 
     private void assertThatResultWasReceived(List<String> strings, long timeout, TemporalUnit timeUnit) throws InterruptedException {
         Supplier<Boolean> evaluationSupplier = () -> {
-            List<String> stringsCopy = new ArrayList<>(strings);
-            String remoteResponses = stringsCopy.stream().collect(Collectors.joining());
+            StringBuilder remoteResponses = new StringBuilder();
+            for (String string : strings) {
+                remoteResponses.append(string);
+            }
+
             log.trace("Remote responses: {}.", remoteResponses);
-            return remoteResponses.contains(MockProcess.WELCOME_MESSAGE);
+            return remoteResponses.toString().contains(MockProcess.WELCOME_MESSAGE);
         };
 
         try {

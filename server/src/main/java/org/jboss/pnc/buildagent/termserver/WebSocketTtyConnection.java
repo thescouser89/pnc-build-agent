@@ -19,6 +19,7 @@
 package org.jboss.pnc.buildagent.termserver;
 
 import io.termd.core.http.HttpTtyConnection;
+import io.termd.core.util.Vector;
 import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedBinaryMessage;
 import io.undertow.websockets.core.WebSocketChannel;
@@ -30,6 +31,7 @@ import org.xnio.Pooled;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
@@ -65,6 +67,8 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
   }
 
   public WebSocketTtyConnection(WebSocketChannel webSocketChannel, ScheduledExecutorService executor) {
+    super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
+
     this.webSocketChannel = webSocketChannel;
     this.executor = executor;
 

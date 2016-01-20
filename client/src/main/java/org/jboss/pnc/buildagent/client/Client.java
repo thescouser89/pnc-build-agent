@@ -109,7 +109,7 @@ public class Client {
             session.addMessageHandler(new MessageHandler.Whole<byte[]>() {
                 @Override
                 public void onMessage(byte[] bytes) {
-                    log.trace("Client received binary MESSAGE: {}", new String(bytes));
+                    log.trace("Client received binary MESSAGE: [{}]. Raw bytes [{}].", new String(bytes), bytes);
                     if (onBinaryMessageConsumer != null) {
                         onBinaryMessageConsumer.accept(bytes);
                     }
