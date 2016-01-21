@@ -25,10 +25,9 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
-import java.util.Scanner;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -42,14 +41,13 @@ public class Terminal extends HttpServlet {
         log.info("Terminal servlet requested.");
         PrintWriter out = response.getWriter();
 
-        String file = Terminal.class.getClassLoader().getResource("index.html").getFile();
-        try (Scanner scanner = new Scanner(new File(file))) {
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
-                out.write(line + "\n");
+        try (InputStream inputStream = Terminal.class.getClassLoader().getResource("index.html").openStream()) {
+            while (inputStream.available() > 0) {
+                byte[] buffer = new byte[512];
+                inputStream.read(buffer);
+                out.write(new String(buffer));
             }
-        } finally {
-            out.close();
         }
+        out.close();
     }
 }
