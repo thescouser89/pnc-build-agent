@@ -99,7 +99,7 @@ public class TestWebSocketConnection {
         List<String> remoteResponses = new ArrayList<>();
 
         Consumer<String> onResponseData = (responseData) -> {
-            log.debug("Adding to remote response list [{}].", responseData);
+            log.trace("Adding to remote response list [{}].", responseData);
             remoteResponses.add(responseData);
         };
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.of(onResponseData), onStatusUpdate, context, Optional.empty());
