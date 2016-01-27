@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.pnc.buildagent.api.Status;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.client.BuildAgentClient;
-import org.jboss.pnc.buildagent.client.Client;
 import org.jboss.pnc.buildagent.common.ObjectWrapper;
 import org.jboss.pnc.buildagent.common.Wait;
 import org.junit.AfterClass;
@@ -66,8 +65,8 @@ public class TestGetRunningProcesses {
 
     @Test
     public void getRunningProcesses() throws Exception {
-        String terminalUrl = "http://" + HOST + ":" + PORT + Client.WEB_SOCKET_TERMINAL_PATH;
-        String listenerUrl = "http://" + HOST + ":" + PORT + Client.WEB_SOCKET_LISTENER_PATH;
+        String terminalUrl = "http://" + HOST + ":" + PORT;
+        String listenerUrl = "http://" + HOST + ":" + PORT;
 
         HttpURLConnection connection = retrieveProcessList();
         Assert.assertEquals(connection.getResponseMessage(), 200, connection.getResponseCode());

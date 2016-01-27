@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 public class Client {
 
     public static final String WEB_SOCKET_TERMINAL_PATH = "/socket/term";
+    public static final String WEB_SOCKET_TERMINAL_TEXT_PATH = "/socket/text";
     public static final String WEB_SOCKET_LISTENER_PATH = "/socket/process-status-updates";
 
     private static final Logger log = LoggerFactory.getLogger(Client.class);

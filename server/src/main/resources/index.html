@@ -33,51 +33,17 @@ socket output:<br />
 <pre id="output" style="border: solid black 1px; width: 400px: height: 250px;">
 </pre>
 
-
-<script src="https://github.com/mgechev/blobreader/blob/master/dist/blob-reader.min.js" />
 <script>
 var output = document.getElementById("output");
 
 console.log(output.innerHTML);
 
-var exampleSocket = new WebSocket("ws://localhost:8080/socket/term");
-//exampleSocket.binaryType = 'arraybuffer';
+var socket = new WebSocket("ws://localhost:8080/socket/text");
 
-/*
-var fr = new FileReader();
-fr.onload = function (e) {
-  //arr = new Uint8Array(e.target.result);
-  arr = e.target.result;
-  for (i = 0; i < arr.length; i++) {
-    showMessage("d:" + arr[i]);
-    showMessage(String.fromCharCode(parseInt(arr[i])));
-  }
-};
-
-exampleSocket.onmessage = function (event) {
-    console.log("Msg received.");
-    fr.readAsArrayBuffer(event.data);
-}*/
-
-
-/*exampleSocket.onmessage = handleReceive;
-
-function handleReceive(message) {
-  var buffer = new Uint8Array(message.data);
-  for (var i=0; i < buffer.length; i++) {
-    showMessage(String.fromCharCode(parseInt(buffer[i])));
-    //showMessage(String.fromCharCode(buffer[i]));
-  }
-}*/
-
-BlobReader(blob)
-.readUint8(function(buffer) {
-  for (var i=0; i < buffer.length; i++) {
-    showMessage(String.fromCharCode(parseInt(buffer[i])));
-    //showMessage(String.fromCharCode(buffer[i]));
-  }
-
-});
+socket.onmessage = function (event) {
+    console.log("Msg received." + event.data);
+    showMessage(event.data);
+}
 
 function showMessage(msg) {
     console.log("received str: " + msg);
@@ -95,7 +61,7 @@ function sendCmd(cmd) {
 
     var blob = new Blob([JSON.stringify(jsonCmd, null, 2)], {type : 'application/json'});
 
-    exampleSocket.send(blob);
+    socket.send(blob);
 }
 
 function retrieve(id) {

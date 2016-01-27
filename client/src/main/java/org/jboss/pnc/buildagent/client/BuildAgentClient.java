@@ -20,6 +20,7 @@ package org.jboss.pnc.buildagent.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.common.ObjectWrapper;
 import org.jboss.pnc.buildagent.common.Wait;
@@ -45,22 +46,33 @@ import java.util.function.Consumer;
 public class BuildAgentClient implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(BuildAgentClient.class);
+    private final ResponseMode responseMode;
 
     Client statusUpdatesClient;
     Client commandExecutingClient;
 
-    public BuildAgentClient(String termSocketUrl, String statusUpdatesSocketUrl,
+    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
+                            Optional<Consumer<String>> responseDataConsumer,
+                            Consumer<TaskStatusUpdateEvent> onStatusUpdate,
+                            String context,
+                            Optional<String> sessionId) throws TimeoutException, InterruptedException {
+        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, context, sessionId, ResponseMode.BINARY);
+    }
+
+    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
             Optional<Consumer<String>> responseDataConsumer,
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
             String context,
-            Optional<String> sessionId) throws TimeoutException, InterruptedException {
+            Optional<String> sessionId,
+            ResponseMode responseMode) throws TimeoutException, InterruptedException {
 
         Consumer<TaskStatusUpdateEvent> onStatusUpdateInternal = (event) -> {
             onStatusUpdate.accept(event);
         };
 
-        statusUpdatesClient = connectStatusListenerClient(statusUpdatesSocketUrl, onStatusUpdateInternal, ""); //TODO use context
-        commandExecutingClient = connectCommandExecutingClient(termSocketUrl, responseDataConsumer, "", sessionId);
+        statusUpdatesClient = connectStatusListenerClient(statusUpdatesSocketBaseUrl, onStatusUpdateInternal, ""); //TODO use context
+        commandExecutingClient = connectCommandExecutingClient(termSocketBaseUrl, responseDataConsumer, "", sessionId);
+        this.responseMode = responseMode;
     }
 
     public void executeCommand(String command) {
@@ -74,7 +86,7 @@ public class BuildAgentClient implements Closeable {
         }
     }
 
-    private static Client connectStatusListenerClient(String webSocketUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String context) {
+    private Client connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String context) {
         Client client = initializeDefault();
         Consumer<String> responseConsumer = (text) -> {
             log.trace("Decoding response: {}", text);
@@ -99,18 +111,48 @@ public class BuildAgentClient implements Closeable {
         });
 
         try {
-            client.connect(webSocketUrl + "/?context=" + context);
+            client.connect(webSocketBaseUrl + Client.WEB_SOCKET_LISTENER_PATH + "/?context=" + context);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
         return client;
     }
 
-    private static Client connectCommandExecutingClient(String webSocketUrl, Optional<Consumer<String>> responseDataConsumer, String context, Optional<String> sessionId) throws InterruptedException, TimeoutException {
+    private Client connectCommandExecutingClient(String webSocketBaseUrl, Optional<Consumer<String>> responseDataConsumer, String context, Optional<String> sessionId) throws InterruptedException, TimeoutException {
         ObjectWrapper<Boolean> connected = new ObjectWrapper<>(false);
 
         Client client = initializeDefault();
 
+        if (ResponseMode.TEXT.equals(responseMode)) {
+            registerTextResponseConsumer(responseDataConsumer, connected, client);
+        } else {
+            registerBinaryResponseConsumer(responseDataConsumer, connected, client);
+        }
+
+        client.onClose(closeReason -> {
+        });
+
+        String sessionIdParam = "";
+        if (sessionId.isPresent()) sessionIdParam = "&sessionId=" + sessionId;
+
+        String webSocketPath;
+        if (ResponseMode.TEXT.equals(responseMode)) {
+            webSocketPath = webSocketBaseUrl + Client.WEB_SOCKET_TERMINAL_TEXT_PATH;
+        } else {
+            webSocketPath = webSocketBaseUrl + Client.WEB_SOCKET_TERMINAL_PATH;
+        }
+
+        try {
+            client.connect(webSocketPath + "/?context=" + context + sessionIdParam);
+        } catch (Exception e) {
+            throw new AssertionError("Failed to connect to remote client.", e);
+        }
+        //if reconnecting (sessionId present) return immediately
+        Wait.forCondition(() -> sessionId.isPresent() || connected.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        return client;
+    }
+
+    private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, ObjectWrapper<Boolean> connected, Client client) {
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
             if ("% ".equals(responseData)) { //TODO use events
@@ -121,21 +163,18 @@ public class BuildAgentClient implements Closeable {
             }
         };
         client.onBinaryMessage(responseConsumer);
+    }
 
-        client.onClose(closeReason -> {
-        });
-
-        String sessionIdParam = "";
-        if (sessionId.isPresent()) sessionIdParam = "&sessionId=" + sessionId;
-
-        try {
-            client.connect(webSocketUrl + "/?context=" + context + sessionIdParam);
-        } catch (Exception e) {
-            throw new AssertionError("Failed to connect to remote client.", e);
-        }
-        //if reconnecting (sessionId present) return immediately
-        Wait.forCondition(() -> sessionId.isPresent() || connected.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
-        return client;
+    private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, ObjectWrapper<Boolean> connected, Client client) {
+        Consumer<String> responseConsumer = (string) -> {
+            if ("% ".equals(string)) { //TODO use events
+                log.info("Received command line 'ready'(%) marker.");
+                connected.set(true);
+            } else {
+                responseDataConsumer.ifPresent((rdc) -> rdc.accept(string));;
+            }
+        };
+        client.onStringMessage(responseConsumer);
     }
 
     private static Client initializeDefault() {

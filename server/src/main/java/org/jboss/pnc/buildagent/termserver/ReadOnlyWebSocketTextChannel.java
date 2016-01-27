@@ -1,6 +1,6 @@
 /*
  * JBoss, Home of Professional Open Source.
- * Copyright 2015 Red Hat, Inc., and individual contributors
+ * Copyright 2016 Red Hat, Inc., and individual contributors
  * as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,12 +18,24 @@
 
 package org.jboss.pnc.buildagent.termserver;
 
+import io.undertow.websockets.core.WebSocketChannel;
+import io.undertow.websockets.core.WebSockets;
+
+import java.nio.charset.StandardCharsets;
+
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class Configurations {
-  public static final String HOST = "localhost";
-  public static final String TERM_PATH = "/term";
-  public static final String TERM_PATH_TEXT = "/text";
-  public static final String PROCESS_UPDATES_PATH = "/process-status-updates";
+public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
+
+    private WebSocketChannel webSocketChannel;
+
+    public ReadOnlyWebSocketTextChannel(WebSocketChannel webSocketChannel) {
+        this.webSocketChannel = webSocketChannel;
+    }
+
+    @Override
+    public void writeOutput(byte[] buffer) {
+        WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
+    }
 }
