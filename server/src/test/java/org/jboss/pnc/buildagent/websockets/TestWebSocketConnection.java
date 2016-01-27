@@ -20,10 +20,10 @@ package org.jboss.pnc.buildagent.websockets;
 
 import org.jboss.pnc.buildagent.MockProcess;
 import org.jboss.pnc.buildagent.TermdServer;
+import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.Status;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.client.BuildAgentClient;
-import org.jboss.pnc.buildagent.client.Client;
 import org.jboss.pnc.buildagent.common.ObjectWrapper;
 import org.jboss.pnc.buildagent.common.Wait;
 import org.junit.AfterClass;
@@ -66,8 +66,8 @@ public class TestWebSocketConnection {
     private static File logFolder = Paths.get("").toAbsolutePath().toFile();
     private static File logFile = new File(logFolder, "console.log");
 
-    String terminalUrl = "http://" + HOST + ":" + PORT + Client.WEB_SOCKET_TERMINAL_PATH;
-    String listenerUrl = "http://" + HOST + ":" + PORT + Client.WEB_SOCKET_LISTENER_PATH;
+    String terminalBaseUrl = "http://" + HOST + ":" + PORT;
+    String listenerBaseUrl = "http://" + HOST + ":" + PORT;
 
     @BeforeClass
     public static void setUP() throws Exception {
@@ -89,8 +89,17 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults() throws Exception {
-        String context = this.getClass().getName() + ".clientShouldBeAbleToRunRemoteCommandAndReceiveResults";
+    public void clientShouldBeAbleToRunRemoteCommandAndReceiveBinaryResults() throws Exception {
+        clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.BINARY);
+    }
+
+    @Test
+    public void clientShouldBeAbleToRunRemoteCommandAndReceiveTextResults() throws Exception {
+        clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.BINARY);
+    }
+
+    public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode responseMode) throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToRunRemoteCommandAndReceiveResults" + responseMode;
 
         List<TaskStatusUpdateEvent> remoteResponseStatuses = new ArrayList<>();
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
@@ -102,7 +111,14 @@ public class TestWebSocketConnection {
             log.trace("Adding to remote response list [{}].", responseData);
             remoteResponses.add(responseData);
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.of(onResponseData), onStatusUpdate, context, Optional.empty());
+        BuildAgentClient buildAgentClient = new BuildAgentClient(
+                terminalBaseUrl,
+                listenerBaseUrl,
+                Optional.of(onResponseData),
+                onStatusUpdate,
+                context,
+                Optional.empty(),
+                ResponseMode.BINARY);
         buildAgentClient.executeCommand(TEST_COMMAND);
 
         assertThatResultWasReceived(remoteResponses, 10, ChronoUnit.SECONDS);
@@ -125,7 +141,7 @@ public class TestWebSocketConnection {
             }
         };
 
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
 
         buildAgentClient.executeCommand(TEST_COMMAND);
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
@@ -148,14 +164,14 @@ public class TestWebSocketConnection {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
         buildAgentClient.executeCommand(TEST_COMMAND);
 
         StringBuilder response = new StringBuilder();
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalUrl, listenerUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"));
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"));
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
 

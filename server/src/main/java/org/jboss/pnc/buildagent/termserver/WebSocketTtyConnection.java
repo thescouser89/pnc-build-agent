@@ -24,6 +24,7 @@ import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedBinaryMessage;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
+import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.ChannelListener;
@@ -45,13 +46,18 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
 
   private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
   private WebSocketChannel webSocketChannel;
+  private ResponseMode responseMode;
   private final ScheduledExecutorService executor;
   private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
 
   @Override
   protected void write(byte[] buffer) {
     if (isOpen()) {
-      WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+      if (ResponseMode.TEXT.equals(responseMode)) {
+        WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
+      } else {
+        WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+      }
     }
     readonlyChannels.forEach((channel) -> channel.writeOutput(buffer));
   }
@@ -66,10 +72,11 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
     executor.schedule(task, delay, unit);
   }
 
-  public WebSocketTtyConnection(WebSocketChannel webSocketChannel, ScheduledExecutorService executor) {
+  public WebSocketTtyConnection(WebSocketChannel webSocketChannel, ResponseMode responseMode, ScheduledExecutorService executor) {
     super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
     this.webSocketChannel = webSocketChannel;
+    this.responseMode = responseMode;
     this.executor = executor;
 
     registerWebSocketChannelListener(webSocketChannel);

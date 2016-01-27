@@ -28,6 +28,7 @@ import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.CloseMessage;
 import io.undertow.websockets.core.WebSockets;
+import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,12 +114,12 @@ class Term {
     }
   }
 
-  synchronized HttpHandler getWebSocketHandler() {
+  synchronized HttpHandler getWebSocketHandler(ResponseMode responseMode) {
     //TODO unify appendReadonlyChannel and webSocketTtyConnection.addReadonlyChannel
     //TODO should we create new ttyConnection independent of webSockets and attach sockets later on
     WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
       if (webSocketTtyConnection == null) {
-        webSocketTtyConnection = new WebSocketTtyConnection(webSocketChannel, executor);
+        webSocketTtyConnection = new WebSocketTtyConnection(webSocketChannel, responseMode, executor);
         appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
         webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeWebSocketChannel(); destroyIfInactiveAndDisconnected();});
         TtyBridge ttyBridge = new TtyBridge(webSocketTtyConnection);
@@ -127,10 +128,15 @@ class Term {
             .readline();
       } else {
         if (webSocketTtyConnection.isOpen()) {
-          ReadOnlyChannel readOnlyChannel = new ReadOnlyWebSocketChannel(webSocketChannel);
+          ReadOnlyChannel readOnlyChannel;
+          if (responseMode.equals(ResponseMode.TEXT)) {
+            readOnlyChannel = new ReadOnlyWebSocketTextChannel(webSocketChannel);
+          } else {
+            readOnlyChannel = new ReadOnlyWebSocketChannel(webSocketChannel);
+          }
           webSocketTtyConnection.addReadonlyChannel(readOnlyChannel);
           webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeReadonlyChannel(readOnlyChannel); destroyIfInactiveAndDisconnected();});
-        } else {
+        } else { //reconnect to existing session if there is no active master connection
           webSocketTtyConnection.setWebSocketChannel(webSocketChannel);
           webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeWebSocketChannel(); destroyIfInactiveAndDisconnected();});
         }

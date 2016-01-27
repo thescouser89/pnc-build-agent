@@ -20,6 +20,7 @@ package org.jboss.pnc.buildagent.termserver;
 
 import io.undertow.Undertow;
 import io.undertow.server.HttpServerExchange;
+import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,7 @@ public class UndertowBootstrap {
   public void bootstrap(final Consumer<Boolean> completionHandler) {
     server = Undertow.builder()
         .addHttpListener(port, host)
-        .setHandler((exchange) -> handleWebSocketRequests(exchange, Configurations.TERM_PATH, Configurations.PROCESS_UPDATES_PATH))
+        .setHandler((exchange) -> handleWebSocketRequests(exchange, Configurations.TERM_PATH, Configurations.TERM_PATH_TEXT, Configurations.PROCESS_UPDATES_PATH))
         .build();
 
     server.start();
@@ -63,13 +64,18 @@ public class UndertowBootstrap {
     completionHandler.accept(true);
   }
 
-  protected void handleWebSocketRequests(HttpServerExchange exchange, String termPath, String processUpdatePath) throws Exception {
+  protected void handleWebSocketRequests(HttpServerExchange exchange, String termPath, String stringTermPath, String processUpdatePath) throws Exception {
     String requestPath = exchange.getRequestPath();
     if (requestPath.startsWith(termPath)) {
       log.debug("Connecting to term ...");
       String invokerContext = requestPath.replace(termPath + "/", "");
       Term term = getTerm(invokerContext, appendReadOnlyChannel);
-      term.getWebSocketHandler().handleRequest(exchange);
+      term.getWebSocketHandler(ResponseMode.BINARY).handleRequest(exchange);
+    } else  if (requestPath.startsWith(stringTermPath)) {
+        log.debug("Connecting to string term ...");
+        String invokerContext = requestPath.replace(termPath + "/", "");
+        Term term = getTerm(invokerContext, appendReadOnlyChannel);
+        term.getWebSocketHandler(ResponseMode.TEXT).handleRequest(exchange);
     } else  if (requestPath.startsWith(processUpdatePath)) {
       log.debug("Connecting status listener ...");
       String invokerContext = requestPath.replace(processUpdatePath + "/", "");

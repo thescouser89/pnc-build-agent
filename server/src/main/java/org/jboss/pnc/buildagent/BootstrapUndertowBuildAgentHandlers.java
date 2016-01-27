@@ -31,6 +31,7 @@ import org.jboss.pnc.buildagent.servlet.Download;
 import org.jboss.pnc.buildagent.servlet.Terminal;
 import org.jboss.pnc.buildagent.servlet.Upload;
 import org.jboss.pnc.buildagent.servlet.Welcome;
+import org.jboss.pnc.buildagent.termserver.Configurations;
 import org.jboss.pnc.buildagent.termserver.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.termserver.UndertowBootstrap;
 import org.slf4j.Logger;
@@ -111,7 +112,11 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
     }
 
     private void handleWebSocketRequests(HttpServerExchange exchange, String socketPath) throws Exception {
-        super.handleWebSocketRequests(exchange, socketPath + "/term", socketPath + "/process-status-updates");
+        super.handleWebSocketRequests(
+                exchange,
+                socketPath + Configurations.TERM_PATH,
+                socketPath + Configurations.TERM_PATH_TEXT,
+                socketPath + Configurations.PROCESS_UPDATES_PATH);
     }
 
     private void handleHttpRequests(HttpServerExchange exchange, String httpPath) throws Exception {

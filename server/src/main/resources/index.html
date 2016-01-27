@@ -33,25 +33,16 @@ socket output:<br />
 <pre id="output" style="border: solid black 1px; width: 400px: height: 250px;">
 </pre>
 
-
 <script>
 var output = document.getElementById("output");
 
 console.log(output.innerHTML);
 
-var exampleSocket = new WebSocket("ws://localhost:8080/socket/term");
-    exampleSocket.onmessage = function (event) {
-    console.log("Msg received.");
+var socket = new WebSocket("ws://localhost:8080/socket/text");
 
-    var fr = new FileReader();
-    fr.onload = function (e) {
-      arr = new Uint8Array(e.target.result);
-      for (i = 0; i < arr.length; i++) {
-        //showMessage(arr[i]);
-        showMessage(String.fromCharCode(parseInt(arr[i])));
-      }
-    };
-    fr.readAsArrayBuffer(event.data);
+socket.onmessage = function (event) {
+    console.log("Msg received." + event.data);
+    showMessage(event.data);
 }
 
 function showMessage(msg) {
@@ -70,7 +61,7 @@ function sendCmd(cmd) {
 
     var blob = new Blob([JSON.stringify(jsonCmd, null, 2)], {type : 'application/json'});
 
-    exampleSocket.send(blob);
+    socket.send(blob);
 }
 
 function retrieve(id) {
