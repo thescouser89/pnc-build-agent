@@ -29,13 +29,20 @@ import java.nio.charset.StandardCharsets;
 public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
 
     private WebSocketChannel webSocketChannel;
+    private StringBuilder stringBuilder;
 
     public ReadOnlyWebSocketTextChannel(WebSocketChannel webSocketChannel) {
         this.webSocketChannel = webSocketChannel;
+        stringBuilder = new StringBuilder();
     }
 
     @Override
     public void writeOutput(byte[] buffer) {
-        WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
+        String string = new String(buffer, StandardCharsets.UTF_8);
+        stringBuilder.append(string);
+        if (string.equals("\n")) {
+            WebSockets.sendText(stringBuilder.toString(), webSocketChannel, null);
+            stringBuilder = new StringBuilder();
+        }
     }
 }
