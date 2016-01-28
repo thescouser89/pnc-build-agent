@@ -47,7 +47,7 @@ socket.onmessage = function (event) {
 
 function showMessage(msg) {
     console.log("received str: " + msg);
-    output.innerHTML = output.innerHTML + msg;
+    output.appendChild(document.createTextNode(msg));
 }
 
 function formatCmd(cmd) {
