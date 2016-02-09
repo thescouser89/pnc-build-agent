@@ -61,7 +61,7 @@ public class TestWebSocketConnection {
 
     private static final String HOST = "localhost";
     private static final int PORT = TermdServer.getNextPort();
-    private static final String TEST_COMMAND = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 4";
+    private static final String TEST_COMMAND = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 100 0";
 
     private static File logFolder = Paths.get("").toAbsolutePath().toFile();
     private static File logFile = new File(logFolder, "console.log");
@@ -121,8 +121,8 @@ public class TestWebSocketConnection {
                 ResponseMode.BINARY);
         buildAgentClient.executeCommand(TEST_COMMAND);
 
-        assertThatResultWasReceived(remoteResponses, 10, ChronoUnit.SECONDS);
-        assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 10, ChronoUnit.SECONDS);
+        assertThatResultWasReceived(remoteResponses, 1000, ChronoUnit.SECONDS);
+        assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 1000, ChronoUnit.SECONDS);
         assertThatLogWasWritten(remoteResponseStatuses);
 
         buildAgentClient.close();
@@ -190,13 +190,13 @@ public class TestWebSocketConnection {
             }
 
             log.trace("Remote responses: {}.", remoteResponses);
-            return remoteResponses.toString().contains(MockProcess.WELCOME_MESSAGE);
+            return remoteResponses.toString().contains(MockProcess.DEFAULT_MESSAGE);
         };
 
         try {
             Wait.forCondition(evaluationSupplier, timeout, timeUnit, "Client did not receive welcome message within given timeout.");
         } catch (TimeoutException e) {
-            throw new AssertionError("Response should contain message " + MockProcess.WELCOME_MESSAGE + ".", e);
+            throw new AssertionError("Response should contain message " + MockProcess.DEFAULT_MESSAGE + ".", e);
         }
     }
 
