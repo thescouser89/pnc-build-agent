@@ -95,7 +95,7 @@ public class TestWebSocketConnection {
 
     @Test
     public void clientShouldBeAbleToRunRemoteCommandAndReceiveTextResults() throws Exception {
-        clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.BINARY);
+        clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.TEXT);
     }
 
     public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode responseMode) throws Exception {
@@ -123,6 +123,7 @@ public class TestWebSocketConnection {
 
         assertThatResultWasReceived(remoteResponses, 1000, ChronoUnit.SECONDS);
         assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 1000, ChronoUnit.SECONDS);
+
         assertThatLogWasWritten(remoteResponseStatuses);
 
         buildAgentClient.close();
@@ -136,7 +137,11 @@ public class TestWebSocketConnection {
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
             if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) ) {
-                assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                try {
+                    assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                } catch (TimeoutException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
                 completed.set(true);
             }
         };
@@ -238,7 +243,7 @@ public class TestWebSocketConnection {
         assertTestCommandOutputIsWrittenToLog(taskId);
     }
 
-    private void assertTestCommandOutputIsWrittenToLog(String taskId) {
+    private void assertTestCommandOutputIsWrittenToLog(String taskId) throws TimeoutException, InterruptedException {
         Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
 
         String fileContent;
@@ -248,10 +253,12 @@ public class TestWebSocketConnection {
             throw new AssertionError("Cannot read log file.", e);
         }
         log.debug("Log file content: [{}].", fileContent);
+
+        Wait.forCondition(() -> fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()), 3, ChronoUnit.SECONDS, "Missing or invalid completion state of task " + taskId + ".");
+
         Assert.assertTrue("Missing executed command in log file of task " + taskId + ".", fileContent.contains(TEST_COMMAND));
         Assert.assertTrue("Missing response message in log file of task " + taskId + ".", fileContent.contains("Hello again"));
         Assert.assertTrue("Missing final line in the log file of task " + taskId + ".", fileContent.contains("I'm done."));
-        Assert.assertTrue("Missing or invalid completion state of task " + taskId + ".", fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()));
     }
 
     private String readUrl(String host, int port, String path) throws IOException {
