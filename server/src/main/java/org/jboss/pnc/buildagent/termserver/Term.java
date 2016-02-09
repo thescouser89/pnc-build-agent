@@ -90,7 +90,7 @@ class Term {
   void notifyStatusUpdated(TaskStatusUpdateEvent event) {
     if (event.getNewStatus().isFinal()) {
       activeCommand = false;
-      log.trace("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
+      log.debug("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
       writeCompltededToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
       destroyIfInactiveAndDisconnected();
     } else {
@@ -122,10 +122,14 @@ class Term {
         webSocketTtyConnection = new WebSocketTtyConnection(webSocketChannel, responseMode, executor);
         appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
         webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeWebSocketChannel(); destroyIfInactiveAndDisconnected();});
+        log.info("Creating new TtyBridge for socket with source address {}.", webSocketChannel.getSourceAddress().toString());
         TtyBridge ttyBridge = new TtyBridge(webSocketTtyConnection);
         ttyBridge
-                .setProcessListener(onTaskCreated())
+            .setProcessListener(onTaskCreated())
             .readline();
+        ttyBridge.setProcessStdinListener((commandLine) -> {
+          log.debug("New command received: {}", commandLine);
+        });
       } else {
         if (webSocketTtyConnection.isOpen()) {
           ReadOnlyChannel readOnlyChannel;
