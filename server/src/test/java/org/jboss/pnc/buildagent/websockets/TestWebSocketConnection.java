@@ -179,8 +179,7 @@ public class TestWebSocketConnection {
         BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"));
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
-
-        Assert.assertTrue("Missing or invalid response: " + response.toString(), response.toString().contains("I'm done."));
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
         buildAgentClient.close();
