@@ -91,7 +91,7 @@ class Term {
     if (event.getNewStatus().isFinal()) {
       activeCommand = false;
       log.debug("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
-      writeCompltededToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
+      writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
       destroyIfInactiveAndDisconnected();
     } else {
       activeCommand = true;
@@ -102,8 +102,8 @@ class Term {
     }
   }
 
-  private void writeCompltededToReadonlyChannel(Status newStatus) {
-    String completed = "% # Finished with status: " + newStatus + "\r\n";
+  private void writeCompletedToReadonlyChannel(Status newStatus) {
+    String completed = "% # Finished with status: " + newStatus + "\n";
     appendReadOnlyChannel.ifPresent(ch -> ch.writeOutput(completed.getBytes(Charset.forName("UTF-8"))));
   }
 
