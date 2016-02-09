@@ -61,7 +61,7 @@ public class TestWebSocketConnection {
 
     private static final String HOST = "localhost";
     private static final int PORT = TermdServer.getNextPort();
-    private static final String TEST_COMMAND = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 4";
+    private static final String TEST_COMMAND = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 100 0";
 
     private static File logFolder = Paths.get("").toAbsolutePath().toFile();
     private static File logFile = new File(logFolder, "console.log");
@@ -95,7 +95,7 @@ public class TestWebSocketConnection {
 
     @Test
     public void clientShouldBeAbleToRunRemoteCommandAndReceiveTextResults() throws Exception {
-        clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.BINARY);
+        clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.TEXT);
     }
 
     public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode responseMode) throws Exception {
@@ -121,8 +121,9 @@ public class TestWebSocketConnection {
                 ResponseMode.BINARY);
         buildAgentClient.executeCommand(TEST_COMMAND);
 
-        assertThatResultWasReceived(remoteResponses, 10, ChronoUnit.SECONDS);
-        assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 10, ChronoUnit.SECONDS);
+        assertThatResultWasReceived(remoteResponses, 1000, ChronoUnit.SECONDS);
+        assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 1000, ChronoUnit.SECONDS);
+
         assertThatLogWasWritten(remoteResponseStatuses);
 
         buildAgentClient.close();
@@ -136,7 +137,11 @@ public class TestWebSocketConnection {
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
             if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) ) {
-                assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                try {
+                    assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                } catch (TimeoutException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
                 completed.set(true);
             }
         };
@@ -174,8 +179,7 @@ public class TestWebSocketConnection {
         BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"));
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
-
-        Assert.assertTrue("Missing or invalid response: " + response.toString(), response.toString().contains("I'm done."));
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
         buildAgentClient.close();
@@ -190,13 +194,13 @@ public class TestWebSocketConnection {
             }
 
             log.trace("Remote responses: {}.", remoteResponses);
-            return remoteResponses.toString().contains(MockProcess.WELCOME_MESSAGE);
+            return remoteResponses.toString().contains(MockProcess.DEFAULT_MESSAGE);
         };
 
         try {
             Wait.forCondition(evaluationSupplier, timeout, timeUnit, "Client did not receive welcome message within given timeout.");
         } catch (TimeoutException e) {
-            throw new AssertionError("Response should contain message " + MockProcess.WELCOME_MESSAGE + ".", e);
+            throw new AssertionError("Response should contain message " + MockProcess.DEFAULT_MESSAGE + ".", e);
         }
     }
 
@@ -238,7 +242,7 @@ public class TestWebSocketConnection {
         assertTestCommandOutputIsWrittenToLog(taskId);
     }
 
-    private void assertTestCommandOutputIsWrittenToLog(String taskId) {
+    private void assertTestCommandOutputIsWrittenToLog(String taskId) throws TimeoutException, InterruptedException {
         Assert.assertTrue("Missing log file: " + logFile, logFile.exists());
 
         String fileContent;
@@ -248,10 +252,12 @@ public class TestWebSocketConnection {
             throw new AssertionError("Cannot read log file.", e);
         }
         log.debug("Log file content: [{}].", fileContent);
+
+        Wait.forCondition(() -> fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()), 3, ChronoUnit.SECONDS, "Missing or invalid completion state of task " + taskId + ".");
+
         Assert.assertTrue("Missing executed command in log file of task " + taskId + ".", fileContent.contains(TEST_COMMAND));
         Assert.assertTrue("Missing response message in log file of task " + taskId + ".", fileContent.contains("Hello again"));
         Assert.assertTrue("Missing final line in the log file of task " + taskId + ".", fileContent.contains("I'm done."));
-        Assert.assertTrue("Missing or invalid completion state of task " + taskId + ".", fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()));
     }
 
     private String readUrl(String host, int port, String path) throws IOException {

@@ -18,7 +18,6 @@
 
 package org.jboss.pnc.buildagent;
 
-import io.termd.core.pty.PtyMaster;
 import org.jboss.pnc.buildagent.termserver.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,11 +35,6 @@ public class IoLoggerChannel implements ReadOnlyChannel {
 
     public IoLoggerChannel(Path logPath) {
         ioLogger = new IoLogger(logPath);
-    }
-
-    public void finalizeLog(PtyMaster task) {
-        String completed = "% # Finished with status: " + task.getStatus() + "\r\n";
-        ioLogger.write(completed);
     }
 
     @Override
