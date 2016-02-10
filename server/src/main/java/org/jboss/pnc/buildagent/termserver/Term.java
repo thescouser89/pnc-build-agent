@@ -33,6 +33,7 @@ import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,134 +44,155 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 /**
-* @author <a href="mailto:julien@julienviet.com">Julien Viet</a>
-* @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
-*/
+ * @author <a href="mailto:julien@julienviet.com">Julien Viet</a>
+ * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
+ */
 class Term {
 
-  private Logger log = LoggerFactory.getLogger(Term.class);
+    private Logger log = LoggerFactory.getLogger(Term.class);
 
-  final String context;
-  private Runnable onDestroy;
-  final Set<Consumer<TaskStatusUpdateEvent>> statusUpdateListeners = new HashSet<>();
-  private WebSocketTtyConnection webSocketTtyConnection;
-  private boolean activeCommand;
-  private ScheduledExecutorService executor;
-  private Optional<ReadOnlyChannel> appendReadOnlyChannel;
+    final String context;
+    private Runnable onDestroy;
+    final Set<Consumer<TaskStatusUpdateEvent>> statusUpdateListeners = new HashSet<>();
+    private WebSocketTtyConnection webSocketTtyConnection;
+    private boolean activeCommand;
+    private Optional<ReadOnlyChannel> appendReadOnlyChannel;
 
-  public Term(String context, Runnable onDestroy, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
-    this.context = context;
-    this.onDestroy = onDestroy;
-    this.executor = executor;
-    this.appendReadOnlyChannel = appendReadOnlyChannel;
-  }
+    public Term(String context, Runnable onDestroy, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+        this.context = context;
+        this.onDestroy = onDestroy;
+        this.appendReadOnlyChannel = appendReadOnlyChannel;
 
-  public void addStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
-    statusUpdateListeners.add(statusUpdateListener);
-  }
-
-  public void removeStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
-    statusUpdateListeners.remove(statusUpdateListener);
-  }
-
-  public Consumer<PtyMaster> onTaskCreated() {
-    return (ptyMaster) -> {
-      ptyMaster.setChangeHandler((oldStatus, newStatus) -> {
-        notifyStatusUpdated(
-            new TaskStatusUpdateEvent(
-                    "" + ptyMaster.getId(),
-                    StatusConverter.fromTermdStatus(oldStatus),
-                    StatusConverter.fromTermdStatus(newStatus),
-                    context)
-        );
-      });
-    };
-  }
-
-  void notifyStatusUpdated(TaskStatusUpdateEvent event) {
-    if (event.getNewStatus().isFinal()) {
-      activeCommand = false;
-      log.debug("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
-      writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
-      destroyIfInactiveAndDisconnected();
-    } else {
-      activeCommand = true;
-    }
-    for (Consumer<TaskStatusUpdateEvent> statusUpdateListener : statusUpdateListeners) {
-      log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, event.getTaskId(), event.getNewStatus());
-      statusUpdateListener.accept(event);
-    }
-  }
-
-  private void writeCompletedToReadonlyChannel(Status newStatus) {
-    String completed = "% # Finished with status: " + newStatus + "\n";
-    appendReadOnlyChannel.ifPresent(ch -> ch.writeOutput(completed.getBytes(Charset.forName("UTF-8"))));
-  }
-
-  private void destroyIfInactiveAndDisconnected() {
-    if (!activeCommand && !webSocketTtyConnection.isOpen()) {
-      log.debug("Destroying Term as there is no running command and no active connection.");
-      onDestroy.run();
-    }
-  }
-
-  synchronized HttpHandler getWebSocketHandler(ResponseMode responseMode) {
-    //TODO unify appendReadonlyChannel and webSocketTtyConnection.addReadonlyChannel
-    //TODO should we create new ttyConnection independent of webSockets and attach sockets later on
-    WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
-      if (webSocketTtyConnection == null) {
-        webSocketTtyConnection = new WebSocketTtyConnection(webSocketChannel, responseMode, executor);
+        webSocketTtyConnection = new WebSocketTtyConnection(executor);
         appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
-        webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeWebSocketChannel(); destroyIfInactiveAndDisconnected();});
-        log.info("Creating new TtyBridge for socket with source address {}.", webSocketChannel.getSourceAddress().toString());
-        TtyBridge ttyBridge = new TtyBridge(webSocketTtyConnection);
-        ttyBridge
-            .setProcessListener(onTaskCreated())
-            .readline();
-        ttyBridge.setProcessStdinListener((commandLine) -> {
-          log.debug("New command received: {}", commandLine);
-        });
-      } else {
-        if (webSocketTtyConnection.isOpen()) {
-          ReadOnlyChannel readOnlyChannel;
-          if (responseMode.equals(ResponseMode.TEXT)) {
-            readOnlyChannel = new ReadOnlyWebSocketTextChannel(webSocketChannel);
-          } else {
-            readOnlyChannel = new ReadOnlyWebSocketChannel(webSocketChannel);
-          }
-          webSocketTtyConnection.addReadonlyChannel(readOnlyChannel);
-          webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeReadonlyChannel(readOnlyChannel); destroyIfInactiveAndDisconnected();});
-        } else { //reconnect to existing session if there is no active master connection
-          webSocketTtyConnection.setWebSocketChannel(webSocketChannel);
-          webSocketChannel.addCloseTask((task) -> {webSocketTtyConnection.removeWebSocketChannel(); destroyIfInactiveAndDisconnected();});
+        log.info("Creating new TtyBridge.");
+    }
+
+    private volatile Boolean ttyBridgeInitialized = false;
+
+    private void initializeTtyBridge() {
+        synchronized (this) {
+            if (!ttyBridgeInitialized) {
+                TtyBridge ttyBridge = new TtyBridge(webSocketTtyConnection);
+                ttyBridge
+                        .setProcessListener(onTaskCreated())
+                        .readline();
+                ttyBridge.setProcessStdinListener((commandLine) -> {
+                    log.debug("New command received: {}", commandLine);
+                });
+                ttyBridgeInitialized = true;
+            }
         }
-      }
-    };
-    return new WebSocketProtocolHandshakeHandler(onWebSocketConnected);
-  }
+    }
 
-  HttpHandler webSocketStatusUpdateHandler() {
-    WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
-      Consumer<TaskStatusUpdateEvent> statusUpdateListener = event -> {
-        Map<String, Object> statusUpdate = new HashMap<>();
-        statusUpdate.put("action", "status-update");
-        statusUpdate.put("event", event);
+    public void addStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
+        statusUpdateListeners.add(statusUpdateListener);
+    }
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        try {
-          String message = objectMapper.writeValueAsString(statusUpdate);
-          WebSockets.sendText(message, webSocketChannel, null);
-        } catch (JsonProcessingException e) {
-          log.error("Cannot write object to JSON", e);
-          String errorMessage = "Cannot write object to JSON: " + e.getMessage();
-          WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
+    public void removeStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
+        statusUpdateListeners.remove(statusUpdateListener);
+    }
+
+    public Consumer<PtyMaster> onTaskCreated() {
+        return (ptyMaster) -> {
+            ptyMaster.setChangeHandler((oldStatus, newStatus) -> {
+                notifyStatusUpdated(
+                        new TaskStatusUpdateEvent(
+                                "" + ptyMaster.getId(),
+                                StatusConverter.fromTermdStatus(oldStatus),
+                                StatusConverter.fromTermdStatus(newStatus),
+                                context)
+                );
+            });
+        };
+    }
+
+    void notifyStatusUpdated(TaskStatusUpdateEvent event) {
+        if (event.getNewStatus().isFinal()) {
+            activeCommand = false;
+            log.debug("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
+            writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
+            destroyIfInactiveAndDisconnected();
+        } else {
+            activeCommand = true;
         }
-      };
-      log.debug("Registering new status update listener {}.", statusUpdateListener);
-      addStatusUpdateListener(statusUpdateListener);
-      webSocketChannel.addCloseTask((task) -> removeStatusUpdateListener(statusUpdateListener));
-    };
+        for (Consumer<TaskStatusUpdateEvent> statusUpdateListener : statusUpdateListeners) {
+            log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, event.getTaskId(), event.getNewStatus());
+            statusUpdateListener.accept(event);
+        }
+    }
 
-    return new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
-  }
+    private void writeCompletedToReadonlyChannel(Status newStatus) {
+        String completed = "% # Finished with status: " + newStatus + "\n";
+        appendReadOnlyChannel.ifPresent(ch -> ch.writeOutput(completed.getBytes(Charset.forName("UTF-8"))));
+    }
+
+    private void destroyIfInactiveAndDisconnected() {
+        if (!activeCommand && !webSocketTtyConnection.isOpen()) {
+            log.debug("Destroying Term as there is no running command and no active connection.");
+            onDestroy.run();
+        }
+    }
+
+    HttpHandler getWebSocketHandler(ResponseMode responseMode, boolean readOnly) {
+        //TODO unify appendReadonlyChannel and webSocketTtyConnection.addReadonlyChannel
+        WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
+            if (!readOnly) {
+                if (webSocketTtyConnection.isOpen()) {
+                    log.info("Closing connection because there is already active master connection.");
+                    webSocketChannel.setCloseReason("Already active master connection.");
+                    try {
+                        webSocketChannel.sendClose();
+                    } catch (IOException e) {
+                        log.warn("Cannot reject connection.");
+                    }
+                }
+                log.info("Adding new master connection from remote address {}.", webSocketChannel.getSourceAddress().toString());
+                webSocketTtyConnection.setWebSocketChannel(webSocketChannel, responseMode);
+                webSocketChannel.addCloseTask((task) -> {
+                    webSocketTtyConnection.removeWebSocketChannel();
+                    destroyIfInactiveAndDisconnected();
+                });
+                initializeTtyBridge();
+            } else {
+                ReadOnlyChannel readOnlyChannel;
+                if (responseMode.equals(ResponseMode.TEXT)) {
+                    readOnlyChannel = new ReadOnlyWebSocketTextChannel(webSocketChannel);
+                } else {
+                    readOnlyChannel = new ReadOnlyWebSocketChannel(webSocketChannel);
+                }
+                webSocketTtyConnection.addReadonlyChannel(readOnlyChannel);
+                webSocketChannel.addCloseTask((task) -> {
+                    webSocketTtyConnection.removeReadonlyChannel(readOnlyChannel);
+                    destroyIfInactiveAndDisconnected();
+                });
+            }
+        };
+        return new WebSocketProtocolHandshakeHandler(onWebSocketConnected);
+    }
+
+    HttpHandler webSocketStatusUpdateHandler() {
+        WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
+            Consumer<TaskStatusUpdateEvent> statusUpdateListener = event -> {
+                Map<String, Object> statusUpdate = new HashMap<>();
+                statusUpdate.put("action", "status-update");
+                statusUpdate.put("event", event);
+
+                ObjectMapper objectMapper = new ObjectMapper();
+                try {
+                    String message = objectMapper.writeValueAsString(statusUpdate);
+                    WebSockets.sendText(message, webSocketChannel, null);
+                } catch (JsonProcessingException e) {
+                    log.error("Cannot write object to JSON", e);
+                    String errorMessage = "Cannot write object to JSON: " + e.getMessage();
+                    WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
+                }
+            };
+            log.debug("Registering new status update listener {}.", statusUpdateListener);
+            addStatusUpdateListener(statusUpdateListener);
+            webSocketChannel.addCloseTask((task) -> removeStatusUpdateListener(statusUpdateListener));
+        };
+
+        return new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
+    }
 }

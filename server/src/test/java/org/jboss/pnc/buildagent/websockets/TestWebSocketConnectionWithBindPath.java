@@ -47,7 +47,7 @@ public class TestWebSocketConnectionWithBindPath {
 
     private static final String HOST = "localhost";
     private static final int PORT = TermdServer.getNextPort();
-    private static final String TEST_COMMAND = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 100 0";
+    private static final String TEST_COMMAND = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 100 10";
 
     private static File logFolder = Paths.get("").toAbsolutePath().toFile();
     private static File logFile = new File(logFolder, "console.log");
@@ -69,7 +69,7 @@ public class TestWebSocketConnectionWithBindPath {
     }
 
     @Test
-    public void clientShouldBeAbleToConnectToRunningProcessWithBindPath() throws Exception {
+    public void clientShouldBeAbleToReConnect() throws Exception {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessWithBindPath";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
@@ -78,16 +78,58 @@ public class TestWebSocketConnectionWithBindPath {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty(), ResponseMode.BINARY);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(TEST_COMMAND);
+        buildAgentClient.close();
 
         StringBuilder response = new StringBuilder();
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"), ResponseMode.TEXT);
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(
+                terminalBaseUrl,
+                listenerBaseUrl,
+                Optional.of(onResponse),
+                onStatusUpdate,
+                context,
+                ResponseMode.BINARY,
+                false);
 
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
+
+        buildAgentClientReconnected.close();
+        buildAgentClient.close();
+    }
+
+    @Test
+    public void clientShouldBeAbleToReConnectWithDifferentResponseMode() throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessWithBindPath";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
+                completed.set(true);
+            }
+        };
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        buildAgentClient.executeCommand(TEST_COMMAND);
+        buildAgentClient.close();
+
+        StringBuilder response = new StringBuilder();
+        Consumer<String> onResponse = (message) -> {
+            response.append(message);
+        };
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(
+                terminalBaseUrl,
+                listenerBaseUrl,
+                Optional.of(onResponse),
+                onStatusUpdate,
+                context,
+                ResponseMode.TEXT,
+                false);
+
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
         Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();

@@ -29,7 +29,6 @@ import org.jboss.pnc.buildagent.common.Wait;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +61,7 @@ public class TestWebSocketConnection {
 
     private static final String HOST = "localhost";
     private static final int PORT = TermdServer.getNextPort();
-    private static final String TEST_COMMAND = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess 100 0";
+    private static final String TEST_COMMAND_BASE = "java -cp ./server/target/test-classes/:./target/test-classes/ org.jboss.pnc.buildagent.MockProcess";
 
     private static File logFolder = Paths.get("").toAbsolutePath().toFile();
     private static File logFile = new File(logFolder, "console.log");
@@ -118,9 +117,9 @@ public class TestWebSocketConnection {
                 Optional.of(onResponseData),
                 onStatusUpdate,
                 context,
-                Optional.empty(),
-                ResponseMode.BINARY);
-        buildAgentClient.executeCommand(TEST_COMMAND);
+                ResponseMode.BINARY,
+                false);
+        buildAgentClient.executeCommand(getTestCommand(100, 0));
 
         assertThatResultWasReceived(remoteResponses, 1000, ChronoUnit.SECONDS);
         assertThatCommandCompletedSuccessfully(remoteResponseStatuses, 1000, ChronoUnit.SECONDS);
@@ -149,11 +148,11 @@ public class TestWebSocketConnection {
 
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
 
-        buildAgentClient.executeCommand(TEST_COMMAND);
+        buildAgentClient.executeCommand(getTestCommand(100, 0));
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
         completed.set(false);
 
-        buildAgentClient.executeCommand(TEST_COMMAND);
+        buildAgentClient.executeCommand(getTestCommand(100, 0));
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
         completed.set(false);
 
@@ -170,14 +169,14 @@ public class TestWebSocketConnection {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
-        buildAgentClient.executeCommand(TEST_COMMAND);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        buildAgentClient.executeCommand(getTestCommand(100, 0));
 
         StringBuilder response = new StringBuilder();
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"));
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, ResponseMode.BINARY, false);
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
         Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
@@ -196,23 +195,30 @@ public class TestWebSocketConnection {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty(), ResponseMode.BINARY);
-        buildAgentClient.executeCommand(TEST_COMMAND);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        buildAgentClient.executeCommand(getTestCommand(100, 10));
 
         StringBuilder response = new StringBuilder();
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"), ResponseMode.TEXT);
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(
+                terminalBaseUrl,
+                listenerBaseUrl,
+                Optional.of(onResponse),
+                (event) -> {},
+                context,
+                ResponseMode.TEXT,
+                true);
 
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
         Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
         buildAgentClient.close();
     }
 
-    @Test @Ignore
+    @Test
     public void clientShouldBeAbleToConnectAndListenForOutputBeforeTheProcessStart() throws Exception {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
 
@@ -227,10 +233,10 @@ public class TestWebSocketConnection {
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientListener = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"), ResponseMode.TEXT);
-        //TODO wait client to connect
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty(), ResponseMode.BINARY);
-        buildAgentClient.executeCommand(TEST_COMMAND);
+        BuildAgentClient buildAgentClientListener = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, ResponseMode.TEXT, true);
+        //connect executing client
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        buildAgentClient.executeCommand(getTestCommand(100, 0));
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
         Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
@@ -308,7 +314,7 @@ public class TestWebSocketConnection {
 
         Wait.forCondition(() -> fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()), 3, ChronoUnit.SECONDS, "Missing or invalid completion state of task " + taskId + ".");
 
-        Assert.assertTrue("Missing executed command in log file of task " + taskId + ".", fileContent.contains(TEST_COMMAND));
+        Assert.assertTrue("Missing executed command in log file of task " + taskId + ".", fileContent.contains(getTestCommand(100, 0)));
         Assert.assertTrue("Missing response message in log file of task " + taskId + ".", fileContent.contains("Hello again"));
         Assert.assertTrue("Missing final line in the log file of task " + taskId + ".", fileContent.contains("I'm done."));
     }
@@ -328,4 +334,7 @@ public class TestWebSocketConnection {
         return stringBuilder.toString();
     }
 
+    private String getTestCommand(int repeat, int delaySec) {
+        return TEST_COMMAND_BASE + " " + repeat + " " + delaySec;
+    }
 }
