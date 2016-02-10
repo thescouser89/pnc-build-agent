@@ -49,9 +49,9 @@ public class TermdServer {
      * @throws InterruptedException
      * @param host
      * @param port
-     * @param contextPath
+     * @param bindPath
      */
-    public static void startServer(String host, int port, String contextPath) throws InterruptedException {
+    public static void startServer(String host, int port, String bindPath) throws InterruptedException {
         Semaphore mutex = new Semaphore(1);
         Runnable onStart = () ->  {
             log.info("Server started.");
@@ -60,7 +60,7 @@ public class TermdServer {
         mutex.acquire();
         serverThread = new Thread(() -> {
             Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
-            new BuildAgent().start(host, port, contextPath, logFolder, onStart);
+            new BuildAgent().start(host, port, bindPath, logFolder, onStart);
         }, "termd-serverThread-thread");
         serverThread.start();
 

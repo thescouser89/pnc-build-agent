@@ -37,82 +37,94 @@ import java.util.function.Consumer;
  */
 public class UndertowBootstrap {
 
-  Logger log = LoggerFactory.getLogger(UndertowBootstrap.class);
+    Logger log = LoggerFactory.getLogger(UndertowBootstrap.class);
 
-  final String host;
-  final int port;
-  private Undertow server;
-  final ConcurrentHashMap<String, Term> terms = new ConcurrentHashMap<>();
-  private ScheduledExecutorService executor;
-  private Optional<ReadOnlyChannel> appendReadOnlyChannel;
+    final String host;
+    final int port;
+    private Undertow server;
+    final ConcurrentHashMap<String, Term> terms = new ConcurrentHashMap<>();
+    private ScheduledExecutorService executor;
+    private Optional<ReadOnlyChannel> appendReadOnlyChannel;
 
-  public UndertowBootstrap(String host, int port, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
-    this.host = host;
-    this.port = port;
-    this.executor = executor;
-    this.appendReadOnlyChannel = appendReadOnlyChannel;
-  }
-
-  public void bootstrap(final Consumer<Boolean> completionHandler) {
-    server = Undertow.builder()
-        .addHttpListener(port, host)
-        .setHandler((exchange) -> handleWebSocketRequests(exchange, Configurations.TERM_PATH, Configurations.TERM_PATH_TEXT, Configurations.PROCESS_UPDATES_PATH))
-        .build();
-
-    server.start();
-
-    completionHandler.accept(true);
-  }
-
-  protected void handleWebSocketRequests(HttpServerExchange exchange, String termPath, String stringTermPath, String processUpdatePath) throws Exception {
-    String requestPath = exchange.getRequestPath();
-    if (requestPath.startsWith(termPath)) {
-      log.debug("Connecting to term ...");
-      String invokerContext = requestPath.replace(termPath + "/", "");
-      Term term = getTerm(invokerContext, appendReadOnlyChannel);
-      term.getWebSocketHandler(ResponseMode.BINARY).handleRequest(exchange);
-    } else  if (requestPath.startsWith(stringTermPath)) {
-        log.debug("Connecting to string term ...");
-        String invokerContext = requestPath.replace(termPath + "/", "");
-        Term term = getTerm(invokerContext, appendReadOnlyChannel);
-        term.getWebSocketHandler(ResponseMode.TEXT).handleRequest(exchange);
-    } else  if (requestPath.startsWith(processUpdatePath)) {
-      log.debug("Connecting status listener ...");
-      String invokerContext = requestPath.replace(processUpdatePath + "/", "");
-      Term term = getTerm(invokerContext, appendReadOnlyChannel);
-      term.webSocketStatusUpdateHandler().handleRequest(exchange);
+    public UndertowBootstrap(String host, int port, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+        this.host = host;
+        this.port = port;
+        this.executor = executor;
+        this.appendReadOnlyChannel = appendReadOnlyChannel;
     }
-  }
 
-  private Term getTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
-    return terms.computeIfAbsent(invokerContext, ctx -> createNewTerm(invokerContext, appendReadOnlyChannel));
-  }
+    public void bootstrap(final Consumer<Boolean> completionHandler) {
+        server = Undertow.builder()
+                .addHttpListener(port, host)
+                .setHandler((exchange) -> handleWebSocketRequests(exchange, Configurations.TERM_PATH, Configurations.TERM_PATH_TEXT, Configurations.PROCESS_UPDATES_PATH))
+                .build();
 
-  protected Term createNewTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
-    log.debug("Creating new term for context [{}].", invokerContext);
-    Runnable onDestroy = () -> terms.remove(invokerContext);
-    Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannel);
+        server.start();
 
-    return term;
-  }
-
-  public void stop() {
-    if (server != null) {
-      server.stop();
+        completionHandler.accept(true);
     }
-  }
 
-  public String getHost() {
-    return host;
-  }
+    protected void handleWebSocketRequests(HttpServerExchange exchange, String termPath, String stringTermPath, String processUpdatePath) throws Exception {
+        String requestPath = exchange.getRequestPath();
 
-  public int getPort() {
-    return port;
-  }
+        if (requestPath.startsWith(processUpdatePath)) {
+            log.debug("Connecting status listener ...");
+            String invokerContext = requestPath.replace(processUpdatePath, "");
+            Term term = getTerm(invokerContext, appendReadOnlyChannel);
+            term.webSocketStatusUpdateHandler().handleRequest(exchange);
+        } else {
+            ResponseMode responseMode;
+            String invokerContext;
+            if (requestPath.startsWith(stringTermPath)) {
+                log.debug("Connecting to string term ...");
+                responseMode = ResponseMode.TEXT;
+                invokerContext = requestPath.replace(stringTermPath, "");
+            } else {
+                log.debug("Connecting to binary term ...");
+                responseMode = ResponseMode.BINARY;
+                invokerContext = requestPath.replace(termPath, "");
+            }
+            //strip /ro from invokerContext
+            if (invokerContext.toLowerCase().endsWith("/ro")) {
+                invokerContext = invokerContext.substring(0, invokerContext.length() - 3);
+            }
+            log.debug("Computed invokerContext [{}] from requestPath [{}] and termPath [{}]", invokerContext, requestPath, termPath);
 
-  public Map<String, Term> getTerms() {
-    Map termsClone = new HashMap<>();
-    termsClone.putAll(terms);
-    return termsClone;
-  }
+            boolean isReadOnly = requestPath.toLowerCase().endsWith("ro");
+            Term term = getTerm(invokerContext, appendReadOnlyChannel);
+            term.getWebSocketHandler(responseMode, isReadOnly).handleRequest(exchange);
+        }
+    }
+
+    private Term getTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+        return terms.computeIfAbsent(invokerContext, ctx -> createNewTerm(invokerContext, appendReadOnlyChannel));
+    }
+
+    protected Term createNewTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+        log.info("Creating new term for context [{}].", invokerContext);
+        Runnable onDestroy = () -> terms.remove(invokerContext);
+        Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannel);
+
+        return term;
+    }
+
+    public void stop() {
+        if (server != null) {
+            server.stop();
+        }
+    }
+
+    public String getHost() {
+        return host;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public Map<String, Term> getTerms() {
+        Map termsClone = new HashMap<>();
+        termsClone.putAll(terms);
+        return termsClone;
+    }
 }

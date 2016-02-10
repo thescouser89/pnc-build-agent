@@ -42,7 +42,7 @@ public class Main {
         options.addOption("b", true, "Address to bind. When not specified " + DEFAULT_HOST + " is used as default.");
         options.addOption("p", true, "Port to bind. When not specified " + DEFAULT_PORT + " is used as default.");
         options.addOption("l", true, "Path to folder where process logs are stored. If undefined logs are not written.");
-        options.addOption("c", true, "Context path. A URL mapping path that is used as a prefix to the path. eg. domain.com/<context-path>/socket");
+        options.addOption("c", true, "Bind path. A URL mapping path that is used as a prefix to the path. eg. domain.com/<bind-path>/socket");
         options.addOption("h", false, "Print this help message.");
 
         CommandLineParser parser = new DefaultParser();
@@ -64,8 +64,8 @@ public class Main {
         } else {
             logPath = Optional.empty();
         }
-        String contextPath = getOption(cmd, "c", "");
-        new BuildAgent().start(host, port, contextPath, logPath, () -> {});
+        String bindPath = getOption(cmd, "c", "");
+        new BuildAgent().start(host, port, bindPath, logPath, () -> {});
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {

@@ -40,7 +40,7 @@ public class BuildAgent {
     IoLoggerChannel ioLoggerChannel;
     private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
 
-    public void start(String host, final int port, String contextPath, Optional<Path> logPath, Runnable onStart) {
+    public void start(String host, final int port, String bindPath, Optional<Path> logPath, Runnable onStart) {
         final int bindPort;
         if (port == 0) {
             bindPort = findFirstFreePort();
@@ -56,7 +56,7 @@ public class BuildAgent {
             ioLoggerChannelWrapper = Optional.empty();
         }
 
-        undertowBootstrap = new BootstrapUndertowBuildAgentHandlers(host, bindPort, executor, contextPath, ioLoggerChannelWrapper);
+        undertowBootstrap = new BootstrapUndertowBuildAgentHandlers(host, bindPort, executor, bindPath, ioLoggerChannelWrapper);
 
         undertowBootstrap.bootstrap(completionHandler -> {
             if (completionHandler) {

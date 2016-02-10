@@ -44,91 +44,88 @@ import java.util.function.Consumer;
  */
 public class WebSocketTtyConnection extends HttpTtyConnection {
 
-  private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
-  private WebSocketChannel webSocketChannel;
-  private ResponseMode responseMode;
-  private final ScheduledExecutorService executor;
-  private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
+    private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
+    private WebSocketChannel webSocketChannel;
+    private ResponseMode responseMode;
+    private final ScheduledExecutorService executor;
+    private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
 
-  @Override
-  protected void write(byte[] buffer) {
-    if (isOpen()) {
-      if (ResponseMode.TEXT.equals(responseMode)) {
-        WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
-      } else {
-        WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
-      }
-    }
-    readonlyChannels.forEach((channel) -> channel.writeOutput(buffer));
-  }
-
-  @Override
-  public void execute(Runnable task) {
-    executor.execute(task);
-  }
-
-  @Override
-  public void schedule(Runnable task, long delay, TimeUnit unit) {
-    executor.schedule(task, delay, unit);
-  }
-
-  public WebSocketTtyConnection(WebSocketChannel webSocketChannel, ResponseMode responseMode, ScheduledExecutorService executor) {
-    super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
-
-    this.webSocketChannel = webSocketChannel;
-    this.responseMode = responseMode;
-    this.executor = executor;
-
-    registerWebSocketChannelListener(webSocketChannel);
-    webSocketChannel.resumeReceives();
-  }
-
-  private void registerWebSocketChannelListener(WebSocketChannel webSocketChannel) {
-    ChannelListener<WebSocketChannel> listener = new AbstractReceiveListener() {
-
-      @Override
-      protected void onFullBinaryMessage(WebSocketChannel channel, BufferedBinaryMessage message) throws IOException {
-        log.trace("Server received full binary message");
-        Pooled<ByteBuffer[]> pulledData = message.getData();
-        try {
-          ByteBuffer[] resource = pulledData.getResource();
-          ByteBuffer byteBuffer = WebSockets.mergeBuffers(resource);
-          String msg = new String(byteBuffer.array());
-          log.trace("Sending message to decoder: {}", msg);
-          writeToDecoder(msg);
-        } finally {
-          pulledData.discard();
+    @Override
+    protected void write(byte[] buffer) {
+        if (isOpen()) {
+            if (ResponseMode.TEXT.equals(responseMode)) {
+                WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
+            } else {
+                WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+            }
         }
-      }
-    };
-    webSocketChannel.getReceiveSetter().set(listener);
-  }
-
-  public boolean isOpen() {
-    return webSocketChannel != null && webSocketChannel.isOpen();
-  }
-
-  public void setWebSocketChannel(WebSocketChannel webSocketChannel) {
-    this.webSocketChannel = webSocketChannel;
-  }
-
-  public void addReadonlyChannel(ReadOnlyChannel webSocketChannel) {
-    readonlyChannels.add(webSocketChannel);
-  }
-
-  public void removeReadonlyChannel(ReadOnlyChannel webSocketChannel) {
-    readonlyChannels.remove(webSocketChannel);
-  }
-
-  public void removeWebSocketChannel() {
-    webSocketChannel = null;
-  }
-
-  @Override
-  public void close() {
-    Consumer<Void> closeHandler = getCloseHandler();
-    if (closeHandler != null) {
-      closeHandler.accept(null);
+        readonlyChannels.forEach((channel) -> channel.writeOutput(buffer));
     }
-  }
+
+    @Override
+    public void execute(Runnable task) {
+        executor.execute(task);
+    }
+
+    @Override
+    public void schedule(Runnable task, long delay, TimeUnit unit) {
+        executor.schedule(task, delay, unit);
+    }
+
+    public WebSocketTtyConnection(ScheduledExecutorService executor) {
+        super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        this.executor = executor;
+    }
+
+    private void registerWebSocketChannelListener(WebSocketChannel webSocketChannel) {
+        ChannelListener<WebSocketChannel> listener = new AbstractReceiveListener() {
+
+            @Override
+            protected void onFullBinaryMessage(WebSocketChannel channel, BufferedBinaryMessage message) throws IOException {
+                log.trace("Server received full binary message");
+                Pooled<ByteBuffer[]> pulledData = message.getData();
+                try {
+                    ByteBuffer[] resource = pulledData.getResource();
+                    ByteBuffer byteBuffer = WebSockets.mergeBuffers(resource);
+                    String msg = new String(byteBuffer.array());
+                    log.trace("Sending message to decoder: {}", msg);
+                    writeToDecoder(msg);
+                } finally {
+                    pulledData.discard();
+                }
+            }
+        };
+        webSocketChannel.getReceiveSetter().set(listener);
+    }
+
+    public boolean isOpen() {
+        return webSocketChannel != null && webSocketChannel.isOpen();
+    }
+
+    public void setWebSocketChannel(WebSocketChannel webSocketChannel, ResponseMode responseMode) {
+        this.webSocketChannel = webSocketChannel;
+        this.responseMode = responseMode;
+        registerWebSocketChannelListener(webSocketChannel);
+        webSocketChannel.resumeReceives();
+    }
+
+    public void addReadonlyChannel(ReadOnlyChannel webSocketChannel) {
+        readonlyChannels.add(webSocketChannel);
+    }
+
+    public void removeReadonlyChannel(ReadOnlyChannel webSocketChannel) {
+        readonlyChannels.remove(webSocketChannel);
+    }
+
+    public void removeWebSocketChannel() {
+        webSocketChannel = null;
+    }
+
+    @Override
+    public void close() {
+        Consumer<Void> closeHandler = getCloseHandler();
+        if (closeHandler != null) {
+            closeHandler.accept(null);
+        }
+    }
 }

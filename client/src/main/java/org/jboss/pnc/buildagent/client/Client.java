@@ -123,7 +123,7 @@ public class Client {
 
         @Override
         public void onClose(Session session, CloseReason closeReason) {
-            log.debug("Client received close.");
+            log.debug("Client received close. CloseReason {}.", closeReason);
             onCloseConsumer.accept(closeReason);
 //            closeLatch.countDown();
         }

@@ -47,6 +47,9 @@ public class BuildAgentClient implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(BuildAgentClient.class);
     private final ResponseMode responseMode;
+    private final boolean readOnly;
+
+    ObjectWrapper<Boolean> isCommandPromptReady = new ObjectWrapper<>(false);
 
     Client statusUpdatesClient;
     Client commandExecutingClient;
@@ -54,39 +57,61 @@ public class BuildAgentClient implements Closeable {
     public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
                             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
+                            String commandContext
+                        ) throws TimeoutException, InterruptedException {
+        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, commandContext, ResponseMode.BINARY, false);
+    }
+
+    /**
+     * @deprecated Use commandContext instead of sessionId
+     */
+    @Deprecated
+    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
+                            Optional<Consumer<String>> responseDataConsumer,
+                            Consumer<TaskStatusUpdateEvent> onStatusUpdate,
                             String context,
                             Optional<String> sessionId) throws TimeoutException, InterruptedException {
-        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, context, sessionId, ResponseMode.BINARY);
+        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, context, ResponseMode.BINARY, false);
     }
 
     public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
             Optional<Consumer<String>> responseDataConsumer,
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
-            String context,
-            Optional<String> sessionId,
-            ResponseMode responseMode) throws TimeoutException, InterruptedException {
+            String commandContext,
+            ResponseMode responseMode,
+            boolean readOnly) throws TimeoutException, InterruptedException {
+
+        this.responseMode = responseMode;
+        this.readOnly = readOnly;
 
         Consumer<TaskStatusUpdateEvent> onStatusUpdateInternal = (event) -> {
             onStatusUpdate.accept(event);
         };
 
-        statusUpdatesClient = connectStatusListenerClient(statusUpdatesSocketBaseUrl, onStatusUpdateInternal, ""); //TODO use context
-        commandExecutingClient = connectCommandExecutingClient(termSocketBaseUrl, responseDataConsumer, "", sessionId);
-        this.responseMode = responseMode;
+        statusUpdatesClient = connectStatusListenerClient(statusUpdatesSocketBaseUrl, onStatusUpdateInternal, commandContext);
+        commandExecutingClient = connectCommandExecutingClient(termSocketBaseUrl, responseDataConsumer, commandContext);
     }
 
-    public void executeCommand(String command) {
+    public void executeCommand(String command) throws TimeoutException {
         log.info("Executing remote command ...");
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
         String data = "{\"action\":\"read\",\"data\":\"" + command + "\\n\"}";
+
+        try {
+            waitCommandPromptReady();
+        } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for command prompt ready state.", e);
+        }
+
         try {
             remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
+            isCommandPromptReady.set(false);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Cannot execute remote command.", e);
         }
     }
 
-    private Client connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String context) {
+    private Client connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String commandContext) {
         Client client = initializeDefault();
         Consumer<String> responseConsumer = (text) -> {
             log.trace("Decoding response: {}", text);
@@ -111,29 +136,28 @@ public class BuildAgentClient implements Closeable {
         });
 
         try {
-            client.connect(webSocketBaseUrl + Client.WEB_SOCKET_LISTENER_PATH + "/?context=" + context);
+            client.connect(webSocketBaseUrl + Client.WEB_SOCKET_LISTENER_PATH + "/" + commandContext);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
         return client;
     }
 
-    private Client connectCommandExecutingClient(String webSocketBaseUrl, Optional<Consumer<String>> responseDataConsumer, String context, Optional<String> sessionId) throws InterruptedException, TimeoutException {
-        ObjectWrapper<Boolean> connected = new ObjectWrapper<>(false);
+    private Client connectCommandExecutingClient(String webSocketBaseUrl, Optional<Consumer<String>> responseDataConsumer, String commandContext) throws InterruptedException, TimeoutException {
 
         Client client = initializeDefault();
 
         if (ResponseMode.TEXT.equals(responseMode)) {
-            registerTextResponseConsumer(responseDataConsumer, connected, client);
+            registerTextResponseConsumer(responseDataConsumer, client);
         } else {
-            registerBinaryResponseConsumer(responseDataConsumer, connected, client);
+            registerBinaryResponseConsumer(responseDataConsumer, client);
         }
 
         client.onClose(closeReason -> {
+            log.info("Client received close {}.", closeReason.toString());
         });
 
-        String sessionIdParam = "";
-        if (sessionId.isPresent()) sessionIdParam = "&sessionId=" + sessionId;
+        String appendReadOnly = readOnly ? "/ro" : "";
 
         String webSocketPath;
         if (ResponseMode.TEXT.equals(responseMode)) {
@@ -142,22 +166,24 @@ public class BuildAgentClient implements Closeable {
             webSocketPath = webSocketBaseUrl + Client.WEB_SOCKET_TERMINAL_PATH;
         }
 
+        if (commandContext != null && !commandContext.equals("")) {
+            commandContext = "/" + commandContext;
+        }
+
         try {
-            client.connect(webSocketPath + "/?context=" + context + sessionIdParam);
+            client.connect(webSocketPath + commandContext + appendReadOnly);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
-        //if reconnecting (sessionId present) return immediately
-        Wait.forCondition(() -> sessionId.isPresent() || connected.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
         return client;
     }
 
-    private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, ObjectWrapper<Boolean> connected, Client client) {
+    private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
-            if ("% ".equals(responseData)) { //TODO use events
-                log.info("Received command line 'ready'(%) marker.");
-                connected.set(true);
+            if ("% ".equals(responseData)) {
+                log.info("Binary consumer received command line 'ready'(%) marker.");
+                isCommandPromptReady.set(true);
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
             }
@@ -165,16 +191,22 @@ public class BuildAgentClient implements Closeable {
         client.onBinaryMessage(responseConsumer);
     }
 
-    private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, ObjectWrapper<Boolean> connected, Client client) {
+    private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
         Consumer<String> responseConsumer = (string) -> {
-            if ("% ".equals(string)) { //TODO use events
-                log.info("Received command line 'ready'(%) marker.");
-                connected.set(true);
+            if ("% ".equals(string)) {
+                log.info("Text consumer received command line 'ready'(%) marker.");
+                isCommandPromptReady.set(true);
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(string));;
             }
         };
         client.onStringMessage(responseConsumer);
+    }
+
+    private void waitCommandPromptReady() throws TimeoutException, InterruptedException {
+        log.trace("Waiting for commandPromptReady ... ");
+        Wait.forCondition(() -> isCommandPromptReady.get(), 10, ChronoUnit.SECONDS, "Command prompt was not ready.");
+        log.debug("CommandPromptReady.");
     }
 
     private static Client initializeDefault() {
