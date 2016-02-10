@@ -80,6 +80,8 @@ public class TestWebSocketConnectionWithBindPath {
         };
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(TEST_COMMAND);
+
+        Thread.sleep(1000); //make sure async command execution started
         buildAgentClient.close();
 
         StringBuilder response = new StringBuilder();
@@ -99,7 +101,6 @@ public class TestWebSocketConnectionWithBindPath {
         Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
-        buildAgentClient.close();
     }
 
     @Test
@@ -114,6 +115,8 @@ public class TestWebSocketConnectionWithBindPath {
         };
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(TEST_COMMAND);
+
+        Thread.sleep(1000); //make sure async command execution started
         buildAgentClient.close();
 
         StringBuilder response = new StringBuilder();
@@ -133,7 +136,6 @@ public class TestWebSocketConnectionWithBindPath {
         Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
-        buildAgentClient.close();
     }
 
 }

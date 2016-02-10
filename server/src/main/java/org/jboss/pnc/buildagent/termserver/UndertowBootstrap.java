@@ -76,11 +76,11 @@ public class UndertowBootstrap {
             ResponseMode responseMode;
             String invokerContext;
             if (requestPath.startsWith(stringTermPath)) {
-                log.debug("Connecting to term ...");
+                log.debug("Connecting to string term ...");
                 responseMode = ResponseMode.TEXT;
                 invokerContext = requestPath.replace(stringTermPath, "");
             } else {
-                log.debug("Connecting to string term ...");
+                log.debug("Connecting to binary term ...");
                 responseMode = ResponseMode.BINARY;
                 invokerContext = requestPath.replace(termPath, "");
             }

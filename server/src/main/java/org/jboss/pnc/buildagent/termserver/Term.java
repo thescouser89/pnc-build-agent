@@ -114,6 +114,7 @@ class Term {
             writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
             destroyIfInactiveAndDisconnected();
         } else {
+            log.debug("Setting command active flag [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
             activeCommand = true;
         }
         for (Consumer<TaskStatusUpdateEvent> statusUpdateListener : statusUpdateListeners) {
@@ -129,7 +130,7 @@ class Term {
 
     private void destroyIfInactiveAndDisconnected() {
         if (!activeCommand && !webSocketTtyConnection.isOpen()) {
-            log.debug("Destroying Term as there is no running command and no active connection.");
+            log.info("Destroying Term as there is no running command and no active connection.");
             onDestroy.run();
         }
     }
@@ -147,7 +148,7 @@ class Term {
                         log.warn("Cannot reject connection.");
                     }
                 }
-                log.info("Adding new master connection from remote address {}.", webSocketChannel.getSourceAddress().toString());
+                log.info("Adding new master connection from remote address {} to context [{}].", webSocketChannel.getSourceAddress().toString(), context);
                 webSocketTtyConnection.setWebSocketChannel(webSocketChannel, responseMode);
                 webSocketChannel.addCloseTask((task) -> {
                     webSocketTtyConnection.removeWebSocketChannel();
@@ -157,8 +158,10 @@ class Term {
             } else {
                 ReadOnlyChannel readOnlyChannel;
                 if (responseMode.equals(ResponseMode.TEXT)) {
+                    log.info("Adding new readonly text consumer connection from remote address {} to context [{}].", webSocketChannel.getSourceAddress().toString(), context);
                     readOnlyChannel = new ReadOnlyWebSocketTextChannel(webSocketChannel);
                 } else {
+                    log.info("Adding new readonly binary consumer connection from remote address {} to context [{}].", webSocketChannel.getSourceAddress().toString(), context);
                     readOnlyChannel = new ReadOnlyWebSocketChannel(webSocketChannel);
                 }
                 webSocketTtyConnection.addReadonlyChannel(readOnlyChannel);

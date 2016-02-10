@@ -49,6 +49,8 @@ public class BuildAgentClient implements Closeable {
     private final ResponseMode responseMode;
     private final boolean readOnly;
 
+    ObjectWrapper<Boolean> isCommandPromptReady = new ObjectWrapper<>(false);
+
     Client statusUpdatesClient;
     Client commandExecutingClient;
 
@@ -90,14 +92,22 @@ public class BuildAgentClient implements Closeable {
         commandExecutingClient = connectCommandExecutingClient(termSocketBaseUrl, responseDataConsumer, commandContext);
     }
 
-    public void executeCommand(String command) {
+    public void executeCommand(String command) throws TimeoutException {
         log.info("Executing remote command ...");
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
         String data = "{\"action\":\"read\",\"data\":\"" + command + "\\n\"}";
+
+        try {
+            waitCommandPromptReady();
+        } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for command prompt ready state.", e);
+        }
+
         try {
             remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
+            isCommandPromptReady.set(false);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Cannot execute remote command.", e);
         }
     }
 
@@ -134,14 +144,13 @@ public class BuildAgentClient implements Closeable {
     }
 
     private Client connectCommandExecutingClient(String webSocketBaseUrl, Optional<Consumer<String>> responseDataConsumer, String commandContext) throws InterruptedException, TimeoutException {
-        ObjectWrapper<Boolean> connected = new ObjectWrapper<>(false);
 
         Client client = initializeDefault();
 
         if (ResponseMode.TEXT.equals(responseMode)) {
-            registerTextResponseConsumer(responseDataConsumer, connected, client);
+            registerTextResponseConsumer(responseDataConsumer, client);
         } else {
-            registerBinaryResponseConsumer(responseDataConsumer, connected, client);
+            registerBinaryResponseConsumer(responseDataConsumer, client);
         }
 
         client.onClose(closeReason -> {
@@ -166,16 +175,15 @@ public class BuildAgentClient implements Closeable {
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
-        Wait.forCondition(() -> connected.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
         return client;
     }
 
-    private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, ObjectWrapper<Boolean> connected, Client client) {
+    private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
-            if ("% ".equals(responseData)) { //TODO use events
-                log.info("Received command line 'ready'(%) marker.");
-                connected.set(true);
+            if ("% ".equals(responseData)) {
+                log.info("Binary consumer received command line 'ready'(%) marker.");
+                isCommandPromptReady.set(true);
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
             }
@@ -183,16 +191,22 @@ public class BuildAgentClient implements Closeable {
         client.onBinaryMessage(responseConsumer);
     }
 
-    private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, ObjectWrapper<Boolean> connected, Client client) {
+    private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
         Consumer<String> responseConsumer = (string) -> {
-            if ("% ".equals(string)) { //TODO use events
-                log.info("Received command line 'ready'(%) marker.");
-                connected.set(true);
+            if ("% ".equals(string)) {
+                log.info("Text consumer received command line 'ready'(%) marker.");
+                isCommandPromptReady.set(true);
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(string));;
             }
         };
         client.onStringMessage(responseConsumer);
+    }
+
+    private void waitCommandPromptReady() throws TimeoutException, InterruptedException {
+        log.trace("Waiting for commandPromptReady ... ");
+        Wait.forCondition(() -> isCommandPromptReady.get(), 10, ChronoUnit.SECONDS, "Command prompt was not ready.");
+        log.debug("CommandPromptReady.");
     }
 
     private static Client initializeDefault() {

@@ -20,6 +20,8 @@ package org.jboss.pnc.buildagent.termserver;
 
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 
@@ -27,6 +29,8 @@ import java.nio.charset.StandardCharsets;
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
+
+    private Logger log = LoggerFactory.getLogger(ReadOnlyWebSocketTextChannel.class);
 
     private WebSocketChannel webSocketChannel;
     private StringBuilder stringBuilder;
@@ -40,7 +44,8 @@ public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
     public void writeOutput(byte[] buffer) {
         String string = new String(buffer, StandardCharsets.UTF_8);
         stringBuilder.append(string);
-        if (string.equals("\n")) {
+        log.trace("sending string [{}], raw [{}]", string, buffer);
+        if (string.equals("\n") || string.equals("\r\n")) {
             WebSockets.sendText(stringBuilder.toString(), webSocketChannel, null);
             stringBuilder = new StringBuilder();
         }

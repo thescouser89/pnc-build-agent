@@ -170,19 +170,21 @@ public class TestWebSocketConnection {
             }
         };
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
-        buildAgentClient.executeCommand(getTestCommand(100, 0));
+        buildAgentClient.executeCommand(getTestCommand(100, 20));
+
+        Thread.sleep(1000); //wait for async command start
+        buildAgentClient.close();
 
         StringBuilder response = new StringBuilder();
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, ResponseMode.BINARY, false);
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), onStatusUpdate, context, ResponseMode.BINARY, false);
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
         Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
-        buildAgentClient.close();
     }
 
     @Test
