@@ -29,6 +29,7 @@ import org.jboss.pnc.buildagent.common.Wait;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -183,7 +184,59 @@ public class TestWebSocketConnection {
 
         buildAgentClientReconnected.close();
         buildAgentClient.close();
+    }
 
+    @Test
+    public void clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode() throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
+                completed.set(true);
+            }
+        };
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty(), ResponseMode.BINARY);
+        buildAgentClient.executeCommand(TEST_COMMAND);
+
+        StringBuilder response = new StringBuilder();
+        Consumer<String> onResponse = (message) -> {
+            response.append(message);
+        };
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"), ResponseMode.TEXT);
+
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
+
+        buildAgentClientReconnected.close();
+        buildAgentClient.close();
+    }
+
+    @Test @Ignore
+    public void clientShouldBeAbleToConnectAndListenForOutputBeforeTheProcessStart() throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
+                completed.set(true);
+            }
+        };
+
+        StringBuilder response = new StringBuilder();
+        Consumer<String> onResponse = (message) -> {
+            response.append(message);
+        };
+        BuildAgentClient buildAgentClientListener = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, Optional.of("reconnect"), ResponseMode.TEXT);
+        //TODO wait client to connect
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty(), ResponseMode.BINARY);
+        buildAgentClient.executeCommand(TEST_COMMAND);
+
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
+
+        buildAgentClientListener.close();
+        buildAgentClient.close();
     }
 
     private void assertThatResultWasReceived(List<String> strings, long timeout, TemporalUnit timeUnit) throws InterruptedException {

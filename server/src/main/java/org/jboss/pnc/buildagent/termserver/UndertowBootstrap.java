@@ -68,17 +68,17 @@ public class UndertowBootstrap {
     String requestPath = exchange.getRequestPath();
     if (requestPath.startsWith(termPath)) {
       log.debug("Connecting to term ...");
-      String invokerContext = requestPath.replace(termPath + "/", "");
+      String invokerContext = requestPath.replace(termPath, "");
       Term term = getTerm(invokerContext, appendReadOnlyChannel);
       term.getWebSocketHandler(ResponseMode.BINARY).handleRequest(exchange);
     } else  if (requestPath.startsWith(stringTermPath)) {
         log.debug("Connecting to string term ...");
-        String invokerContext = requestPath.replace(termPath + "/", "");
+        String invokerContext = requestPath.replace(termPath, "");
         Term term = getTerm(invokerContext, appendReadOnlyChannel);
         term.getWebSocketHandler(ResponseMode.TEXT).handleRequest(exchange);
     } else  if (requestPath.startsWith(processUpdatePath)) {
       log.debug("Connecting status listener ...");
-      String invokerContext = requestPath.replace(processUpdatePath + "/", "");
+      String invokerContext = requestPath.replace(processUpdatePath, "");
       Term term = getTerm(invokerContext, appendReadOnlyChannel);
       term.webSocketStatusUpdateHandler().handleRequest(exchange);
     }
@@ -89,7 +89,7 @@ public class UndertowBootstrap {
   }
 
   protected Term createNewTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
-    log.debug("Creating new term for context [{}].", invokerContext);
+    log.info("Creating new term for context [{}].", invokerContext);
     Runnable onDestroy = () -> terms.remove(invokerContext);
     Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannel);
 

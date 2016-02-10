@@ -55,21 +55,21 @@ import static io.undertow.servlet.Servlets.servlet;
  */
 public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
 
-    private final String contextPath;
+    private final String bindPath;
     Logger log = LoggerFactory.getLogger(BootstrapUndertowBuildAgentHandlers.class);
     private Undertow server;
 
-    public BootstrapUndertowBuildAgentHandlers(String host, int port, ScheduledExecutorService executor, String contextPath, Optional<ReadOnlyChannel> ioLoggerChannel) {
+    public BootstrapUndertowBuildAgentHandlers(String host, int port, ScheduledExecutorService executor, String bindPath, Optional<ReadOnlyChannel> ioLoggerChannel) {
         super(host, port, executor, ioLoggerChannel);
 
-        this.contextPath = contextPath;
+        this.bindPath = bindPath;
     }
 
     public void bootstrap(final Consumer<Boolean> completionHandler) {
 
-        String servletPath = contextPath + "/servlet";
-        String socketPath = contextPath + "/socket";
-        String httpPath = contextPath + "/";
+        String servletPath = bindPath + "/servlet";
+        String socketPath = bindPath + "/socket";
+        String httpPath = bindPath + "/";
 
         DeploymentInfo servletBuilder = deployment()
                 .setClassLoader(BootstrapUndertowBuildAgentHandlers.class.getClassLoader())
@@ -112,6 +112,7 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
     }
 
     private void handleWebSocketRequests(HttpServerExchange exchange, String socketPath) throws Exception {
+        socketPath = stripEndingSlash(socketPath);
         super.handleWebSocketRequests(
                 exchange,
                 socketPath + Configurations.TERM_PATH,
@@ -135,6 +136,13 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
             return;
         }
         ResponseCodeHandler.HANDLE_404.handleRequest(exchange);
+    }
+
+    private String stripEndingSlash(String requestPath) {
+        if (requestPath.endsWith("/")) {
+            requestPath = requestPath.substring(0, requestPath.length() -1);
+        }
+        return requestPath;
     }
 
     private boolean pathMatches(String requestPath, String path) {
