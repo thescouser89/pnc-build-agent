@@ -18,12 +18,19 @@
 
 package org.jboss.pnc.buildagent.server.termserver;
 
-import io.termd.core.http.HttpTtyConnection;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.termd.core.io.BinaryDecoder;
+import io.termd.core.io.BinaryEncoder;
+import io.termd.core.tty.TtyConnection;
+import io.termd.core.tty.TtyEvent;
+import io.termd.core.tty.TtyEventDecoder;
+import io.termd.core.tty.TtyOutputMode;
 import io.termd.core.util.Vector;
 import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedBinaryMessage;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
+import org.jboss.pnc.buildagent.BuildAgentException;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,17 +39,31 @@ import org.xnio.Pooled;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class WebSocketTtyConnection extends HttpTtyConnection {
+public class WebSocketTtyConnection implements TtyConnection {
+
+    private Charset charset;
+    private Vector size;
+    private Consumer<Vector> sizeHandler;
+    private final TtyEventDecoder eventDecoder;
+    private final BinaryDecoder decoder;
+    private final Consumer<int[]> stdout;
+    private Consumer<Void> closeHandler;
+    private Consumer<String> termHandler;
+    private long lastAccessedTime = System.currentTimeMillis();
+
 
     private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
     private WebSocketChannel webSocketChannel;
@@ -50,8 +71,16 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
     private final ScheduledExecutorService executor;
     private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
 
-    @Override
-    protected void write(byte[] buffer) {
+    public WebSocketTtyConnection(ScheduledExecutorService executor) {
+        this.charset = StandardCharsets.UTF_8;
+        this.size = new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE);
+        this.eventDecoder = new TtyEventDecoder(3, 26, 4);
+        this.decoder = new BinaryDecoder(512, charset, eventDecoder);
+        this.stdout = new TtyOutputMode(new BinaryEncoder(charset, this::write));
+        this.executor = executor;
+    }
+
+    private void write(byte[] buffer) {
         if (isOpen()) {
             if (ResponseMode.TEXT.equals(responseMode)) {
                 WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
@@ -72,11 +101,6 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
         executor.schedule(task, delay, unit);
     }
 
-    public WebSocketTtyConnection(ScheduledExecutorService executor) {
-        super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        this.executor = executor;
-    }
-
     private void registerWebSocketChannelListener(WebSocketChannel webSocketChannel) {
         ChannelListener<WebSocketChannel> listener = new AbstractReceiveListener() {
 
@@ -87,9 +111,9 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
                 try {
                     ByteBuffer[] resource = pulledData.getResource();
                     ByteBuffer byteBuffer = WebSockets.mergeBuffers(resource);
-                    String msg = new String(byteBuffer.array());
-                    log.trace("Sending message to decoder: {}", msg);
-                    writeToDecoder(msg);
+                    writeToDecoder(byteBuffer);
+                } catch (BuildAgentException e) {
+                    log.error("Invalid request received.", e);
                 } finally {
                     pulledData.discard();
                 }
@@ -97,6 +121,59 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
         };
         webSocketChannel.getReceiveSetter().set(listener);
     }
+
+    public void writeToDecoder(ByteBuffer byteBuffer) throws BuildAgentException {
+        if (byteBuffer.capacity() == 1) { //handle events
+            decoder.write(byteBuffer.array());
+        } else {
+            String msg = new String(byteBuffer.array());
+
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> obj;
+            String action;
+            try {
+                obj = mapper.readValue(msg, Map.class);
+                action = (String) obj.get("action");
+            } catch (IOException e) {
+                log.error("Cannot write to decoder.", e);
+                return;
+            }
+            if (action != null) {
+                switch (action) {
+                    case "read":
+                        lastAccessedTime = System.currentTimeMillis();
+                        Object data = obj.get("data");
+                        String dataStr;
+                        try {
+                            dataStr = (String) data;
+                        } catch (ClassCastException e) {
+                            throw new BuildAgentException("String value expected.", e);
+                        }
+                        decoder.write(dataStr.getBytes());
+                        break;
+                    case "resize":
+                        try {
+                            int cols = (int) obj.getOrDefault("cols", size.x());
+                            int rows = (int) obj.getOrDefault("rows", size.y());
+                            if (cols > 0 && rows > 0) {
+                                Vector newSize = new Vector(cols, rows);
+                                if (!newSize.equals(size())) {
+                                    size = newSize;
+                                    if (sizeHandler != null) {
+                                        sizeHandler.accept(size);
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            // Invalid size
+                            // Log this
+                        }
+                        break;
+                }
+            }
+        }
+    }
+
 
     public boolean isOpen() {
         return webSocketChannel != null && webSocketChannel.isOpen();
@@ -119,6 +196,86 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
 
     public void removeWebSocketChannel() {
         webSocketChannel = null;
+    }
+
+    @Override
+    public long lastAccessedTime() {
+        return lastAccessedTime;
+    }
+
+    @Override
+    public Vector size() {
+        return size;
+    }
+
+    @Override
+    public Charset inputCharset() {
+        return charset;
+    }
+
+    @Override
+    public Charset outputCharset() {
+        return charset;
+    }
+
+    @Override
+    public String terminalType() {
+        return "vt100";
+    }
+
+    @Override
+    public Consumer<String> getTerminalTypeHandler() {
+        return termHandler;
+    }
+
+    @Override
+    public void setTerminalTypeHandler(Consumer<String> handler) {
+        termHandler = handler;
+    }
+
+    @Override
+    public Consumer<Vector> getSizeHandler() {
+        return sizeHandler;
+    }
+
+    @Override
+    public void setSizeHandler(Consumer<Vector> handler) {
+        this.sizeHandler = handler;
+    }
+
+    @Override
+    public BiConsumer<TtyEvent, Integer> getEventHandler() {
+        return eventDecoder.getEventHandler();
+    }
+
+    @Override
+    public void setEventHandler(BiConsumer<TtyEvent, Integer> handler) {
+        eventDecoder.setEventHandler(handler);
+    }
+
+    @Override
+    public Consumer<int[]> getStdinHandler() {
+        return eventDecoder.getReadHandler();
+    }
+
+    @Override
+    public void setStdinHandler(Consumer<int[]> handler) {
+        eventDecoder.setReadHandler(handler);
+    }
+
+    @Override
+    public Consumer<int[]> stdoutHandler() {
+        return stdout;
+    }
+
+    @Override
+    public void setCloseHandler(Consumer<Void> closeHandler) {
+        this.closeHandler = closeHandler;
+    }
+
+    @Override
+    public Consumer<Void> getCloseHandler() {
+        return closeHandler;
     }
 
     @Override

@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.pnc.buildagent.api.ResponseMode;
@@ -32,8 +33,11 @@ import javax.websocket.RemoteEndpoint;
 import javax.websocket.Session;
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -98,10 +102,11 @@ public class BuildAgentClient implements Closeable {
         this.onCommandExecutionCompleted = Optional.of(commandCompletionListener);
     }
 
-    public void executeCommand(String command) throws TimeoutException {
+    public void executeCommand(String command) throws TimeoutException, BuildAgentClientException, JsonProcessingException {
         log.info("Executing remote command [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
-        String data = "{\"action\":\"read\",\"data\":\"" + command + "\\n\"}";
+
+        ByteBuffer byteBuffer = prepareRemoteCommand(command);
 
         try {
             waitCommandPromptReady();
@@ -111,12 +116,48 @@ public class BuildAgentClient implements Closeable {
 
         try {
             log.debug("Sending remote command...");
-            remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
+            remoteEndpoint.sendBinary(byteBuffer);
             isCommandPromptReady.set(false);
             commandSent = true;
         } catch (IOException e) {
             log.error("Cannot execute remote command.", e);
         }
+    }
+
+    public void executeNow(Object command) throws Exception { //TODO unify with executeCommand
+        log.info("Executing remote command [{}]...", command);
+        RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
+
+        ByteBuffer byteBuffer = prepareRemoteCommand(command);
+
+        try {
+            log.debug("Sending remote command...");
+            remoteEndpoint.sendBinary(byteBuffer);
+            isCommandPromptReady.set(false);
+            commandSent = true;
+        } catch (IOException e) {
+            log.error("Cannot execute remote command.", e);
+        }
+    }
+
+    private ByteBuffer prepareRemoteCommand(Object command) throws JsonProcessingException, BuildAgentClientException {
+        Map<String, Object> cmdJson = new HashMap<>();
+        cmdJson.put("action", "read");
+
+        ByteBuffer byteBuffer;
+        if (command instanceof String) {
+            cmdJson.put("data", command + "\n");
+            ObjectMapper mapper = new ObjectMapper();
+            byteBuffer = ByteBuffer.wrap(mapper.writeValueAsBytes(cmdJson));
+        } else {
+            try {
+                byteBuffer = ByteBuffer.allocate(1).put(((Integer)command).byteValue());
+            } catch (BufferOverflowException | ClassCastException e) {
+                throw new BuildAgentClientException("Invalid signal.", e);
+            }
+            byteBuffer.flip();
+        }
+        return byteBuffer;
     }
 
     private Client connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String commandContext) {
@@ -220,7 +261,7 @@ public class BuildAgentClient implements Closeable {
 
     private void waitCommandPromptReady() throws TimeoutException, InterruptedException {
         log.trace("Waiting for commandPromptReady ... ");
-        Wait.forCondition(() -> isCommandPromptReady.get(), 10, ChronoUnit.SECONDS, "Command prompt was not ready.");
+        Wait.forCondition(() -> isCommandPromptReady.get(), 15, ChronoUnit.SECONDS, "Command prompt was not ready.");
         log.debug("CommandPromptReady.");
     }
 
