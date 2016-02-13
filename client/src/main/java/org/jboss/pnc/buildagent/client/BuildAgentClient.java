@@ -53,6 +53,8 @@ public class BuildAgentClient implements Closeable {
 
     Client statusUpdatesClient;
     Client commandExecutingClient;
+    Optional<Runnable> onCommandExecutionCompleted;
+    private boolean commandSent;
 
     public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
@@ -92,8 +94,12 @@ public class BuildAgentClient implements Closeable {
         commandExecutingClient = connectCommandExecutingClient(termSocketBaseUrl, responseDataConsumer, commandContext);
     }
 
+    public void setCommandCompletionListener(Runnable commandCompletionListener) {
+        this.onCommandExecutionCompleted = Optional.of(commandCompletionListener);
+    }
+
     public void executeCommand(String command) throws TimeoutException {
-        log.info("Executing remote command ...");
+        log.info("Executing remote command [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
         String data = "{\"action\":\"read\",\"data\":\"" + command + "\\n\"}";
 
@@ -104,8 +110,10 @@ public class BuildAgentClient implements Closeable {
         }
 
         try {
+            log.debug("Sending remote command...");
             remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
             isCommandPromptReady.set(false);
+            commandSent = true;
         } catch (IOException e) {
             log.error("Cannot execute remote command.", e);
         }
@@ -183,7 +191,7 @@ public class BuildAgentClient implements Closeable {
             String responseData = new String(bytes);
             if ("% ".equals(responseData)) {
                 log.info("Binary consumer received command line 'ready'(%) marker.");
-                isCommandPromptReady.set(true);
+                onCommandPromptReady();
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
             }
@@ -195,12 +203,19 @@ public class BuildAgentClient implements Closeable {
         Consumer<String> responseConsumer = (string) -> {
             if ("% ".equals(string)) {
                 log.info("Text consumer received command line 'ready'(%) marker.");
-                isCommandPromptReady.set(true);
+                onCommandPromptReady();
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(string));;
             }
         };
         client.onStringMessage(responseConsumer);
+    }
+
+    private void onCommandPromptReady() {
+        isCommandPromptReady.set(true);
+        if (commandSent) {
+            onCommandExecutionCompleted.ifPresent((completed) -> completed.run());
+        }
     }
 
     private void waitCommandPromptReady() throws TimeoutException, InterruptedException {
