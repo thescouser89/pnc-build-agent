@@ -102,7 +102,7 @@ public class BuildAgentClient implements Closeable {
         this.onCommandExecutionCompleted = Optional.of(commandCompletionListener);
     }
 
-    public void executeCommand(String command) throws TimeoutException, BuildAgentClientException, JsonProcessingException {
+    public void executeCommand(String command) throws TimeoutException, BuildAgentClientException {
         log.info("Executing remote command [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
@@ -124,7 +124,7 @@ public class BuildAgentClient implements Closeable {
         }
     }
 
-    public void executeNow(Object command) throws Exception { //TODO unify with executeCommand
+    public void executeNow(Object command) throws BuildAgentClientException { //TODO unify with executeCommand
         log.info("Executing remote command [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
@@ -140,7 +140,7 @@ public class BuildAgentClient implements Closeable {
         }
     }
 
-    private ByteBuffer prepareRemoteCommand(Object command) throws JsonProcessingException, BuildAgentClientException {
+    private ByteBuffer prepareRemoteCommand(Object command) throws BuildAgentClientException {
         Map<String, Object> cmdJson = new HashMap<>();
         cmdJson.put("action", "read");
 
@@ -148,7 +148,11 @@ public class BuildAgentClient implements Closeable {
         if (command instanceof String) {
             cmdJson.put("data", command + "\n");
             ObjectMapper mapper = new ObjectMapper();
-            byteBuffer = ByteBuffer.wrap(mapper.writeValueAsBytes(cmdJson));
+            try {
+                byteBuffer = ByteBuffer.wrap(mapper.writeValueAsBytes(cmdJson));
+            } catch (JsonProcessingException e) {
+                throw new BuildAgentClientException("Cannot serialize string command.", e);
+            }
         } else {
             try {
                 byteBuffer = ByteBuffer.allocate(1).put(((Integer)command).byteValue());
