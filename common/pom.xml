@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.jboss.pnc</groupId>
     <artifactId>build-agent</artifactId>
-    <version>0.2-SNAPSHOT</version>
+    <version>0.2</version>
   </parent>
 
   <artifactId>build-agent-common</artifactId>
