@@ -21,14 +21,16 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
-    <artifactId>build-agent</artifactId>
-    <groupId>org.jboss.pnc</groupId>
+    <groupId>org.jboss.pnc.build-agent</groupId>
+    <artifactId>parent</artifactId>
     <version>0.2</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>build-agent-api</artifactId>
+  <artifactId>api</artifactId>
   <packaging>jar</packaging>
+
+  <name>PNC Build Agent API</name>
 
   <dependencies>
     <dependency>
