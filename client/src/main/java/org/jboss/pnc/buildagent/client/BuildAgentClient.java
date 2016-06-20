@@ -57,30 +57,18 @@ public class BuildAgentClient implements Closeable {
 
     Client statusUpdatesClient;
     Client commandExecutingClient;
-    Optional<Runnable> onCommandExecutionCompleted;
+    Optional<Runnable> onCommandExecutionCompleted = Optional.empty();
     private boolean commandSent;
 
-    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
+    public BuildAgentClient(String termBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
                             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
                             String commandContext
                         ) throws TimeoutException, InterruptedException {
-        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, commandContext, ResponseMode.BINARY, false);
+        this(termBaseUrl, responseDataConsumer, onStatusUpdate, commandContext, ResponseMode.BINARY, false);
     }
 
-    /**
-     * @deprecated Use commandContext instead of sessionId
-     */
-    @Deprecated
-    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
-                            Optional<Consumer<String>> responseDataConsumer,
-                            Consumer<TaskStatusUpdateEvent> onStatusUpdate,
-                            String context,
-                            Optional<String> sessionId) throws TimeoutException, InterruptedException {
-        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, context, ResponseMode.BINARY, false);
-    }
-
-    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
+    public BuildAgentClient(String termBaseUrl,
             Optional<Consumer<String>> responseDataConsumer,
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
             String commandContext,
@@ -94,8 +82,8 @@ public class BuildAgentClient implements Closeable {
             onStatusUpdate.accept(event);
         };
 
-        statusUpdatesClient = connectStatusListenerClient(statusUpdatesSocketBaseUrl, onStatusUpdateInternal, commandContext);
-        commandExecutingClient = connectCommandExecutingClient(termSocketBaseUrl, responseDataConsumer, commandContext);
+        statusUpdatesClient = connectStatusListenerClient(termBaseUrl, onStatusUpdateInternal, commandContext);
+        commandExecutingClient = connectCommandExecutingClient(termBaseUrl, responseDataConsumer, commandContext);
     }
 
     public void setCommandCompletionListener(Runnable commandCompletionListener) {
@@ -189,7 +177,7 @@ public class BuildAgentClient implements Closeable {
         });
 
         try {
-            client.connect(webSocketBaseUrl + Client.WEB_SOCKET_LISTENER_PATH + "/" + commandContext);
+            client.connect(stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_LISTENER_PATH + "/" + commandContext);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
@@ -214,9 +202,9 @@ public class BuildAgentClient implements Closeable {
 
         String webSocketPath;
         if (ResponseMode.TEXT.equals(responseMode)) {
-            webSocketPath = webSocketBaseUrl + Client.WEB_SOCKET_TERMINAL_TEXT_PATH;
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_TEXT_PATH;
         } else {
-            webSocketPath = webSocketBaseUrl + Client.WEB_SOCKET_TERMINAL_PATH;
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_PATH;
         }
 
         if (commandContext != null && !commandContext.equals("")) {
@@ -229,6 +217,10 @@ public class BuildAgentClient implements Closeable {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
         return client;
+    }
+
+    private String stripEndingSlash(String path) {
+        return path.replaceAll("/$", "");
     }
 
     private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
