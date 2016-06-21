@@ -67,7 +67,6 @@ public class TestWebSocketConnection {
     private static File logFile = new File(logFolder, "console.log");
 
     String terminalBaseUrl = "http://" + HOST + ":" + PORT;
-    String listenerBaseUrl = "http://" + HOST + ":" + PORT;
 
     @BeforeClass
     public static void setUP() throws Exception {
@@ -113,7 +112,6 @@ public class TestWebSocketConnection {
         };
         BuildAgentClient buildAgentClient = new BuildAgentClient(
                 terminalBaseUrl,
-                listenerBaseUrl,
                 Optional.of(onResponseData),
                 onStatusUpdate,
                 context,
@@ -146,7 +144,7 @@ public class TestWebSocketConnection {
             }
         };
 
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context);
 
         buildAgentClient.executeCommand(getTestCommand(100, 0));
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
@@ -169,7 +167,7 @@ public class TestWebSocketConnection {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(getTestCommand(100, 20));
 
         Thread.sleep(1000); //wait for async command start
@@ -179,10 +177,10 @@ public class TestWebSocketConnection {
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), onStatusUpdate, context, ResponseMode.BINARY, false);
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(terminalBaseUrl, Optional.of(onResponse), onStatusUpdate, context, ResponseMode.BINARY, false);
 
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
-        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
+        Wait.forCondition(() -> completed.get(), 15, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 5, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
     }
@@ -197,7 +195,7 @@ public class TestWebSocketConnection {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(getTestCommand(100, 10));
 
         StringBuilder response = new StringBuilder();
@@ -206,15 +204,14 @@ public class TestWebSocketConnection {
         };
         BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(
                 terminalBaseUrl,
-                listenerBaseUrl,
                 Optional.of(onResponse),
                 (event) -> {},
                 context,
                 ResponseMode.TEXT,
                 true);
 
-        Wait.forCondition(() -> completed.get(), 5, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
-        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
+        Wait.forCondition(() -> completed.get(), 15, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 5, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
 
         buildAgentClientReconnected.close();
         buildAgentClient.close();
@@ -235,9 +232,9 @@ public class TestWebSocketConnection {
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
-        BuildAgentClient buildAgentClientListener = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.of(onResponse), (event) -> {}, context, ResponseMode.TEXT, true);
+        BuildAgentClient buildAgentClientListener = new BuildAgentClient(terminalBaseUrl, Optional.of(onResponse), (event) -> {}, context, ResponseMode.TEXT, true);
         //connect executing client
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(getTestCommand(100, 0));
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
