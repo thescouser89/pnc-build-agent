@@ -55,9 +55,9 @@ public class BuildAgentClient implements Closeable {
 
     ObjectWrapper<Boolean> isCommandPromptReady = new ObjectWrapper<>(false);
 
-    Client statusUpdatesClient;
-    Client commandExecutingClient;
-    Optional<Runnable> onCommandExecutionCompleted = Optional.empty();
+    private Client statusUpdatesClient;
+    private Client commandExecutingClient;
+    private Optional<Runnable> onCommandExecutionCompleted = Optional.empty();
     private boolean commandSent;
 
     public BuildAgentClient(String termBaseUrl,
@@ -176,8 +176,10 @@ public class BuildAgentClient implements Closeable {
         client.onClose(closeReason -> {
         });
 
+        commandContext = formatCommandContext(commandContext);
+
         try {
-            client.connect(stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_LISTENER_PATH + "/" + commandContext);
+            client.connect(stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_LISTENER_PATH + commandContext);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
@@ -207,9 +209,7 @@ public class BuildAgentClient implements Closeable {
             webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_PATH;
         }
 
-        if (commandContext != null && !commandContext.equals("")) {
-            commandContext = "/" + commandContext;
-        }
+        commandContext = formatCommandContext(commandContext);
 
         try {
             client.connect(webSocketPath + commandContext + appendReadOnly);
@@ -217,6 +217,13 @@ public class BuildAgentClient implements Closeable {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
         return client;
+    }
+
+    private String formatCommandContext(String commandContext) {
+        if (commandContext != null && !commandContext.equals("")) {
+            commandContext = "/" + commandContext;
+        }
+        return commandContext;
     }
 
     private String stripEndingSlash(String path) {
