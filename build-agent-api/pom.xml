@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.jboss.pnc.build-agent</groupId>
     <artifactId>parent</artifactId>
-    <version>0.3-SNAPSHOT</version>
+    <version>0.3</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
