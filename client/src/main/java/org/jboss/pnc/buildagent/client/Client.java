@@ -96,6 +96,7 @@ public class Client {
             log.debug("Client received open.");
             this.session = session;
 
+            //TODO make it optional to connect to log socket. Note that the same client class is used for status updates.
             session.addMessageHandler(new MessageHandler.Whole<String>() {
                 @Override
                 public void onMessage(String message) {
@@ -105,6 +106,7 @@ public class Client {
                     }
                 }
             });
+            //TODO make it optional to connect to log socket. Note that the same clien class is used for status updates.
             session.addMessageHandler(new MessageHandler.Whole<byte[]>() {
                 @Override
                 public void onMessage(byte[] bytes) {
