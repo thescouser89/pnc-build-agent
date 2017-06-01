@@ -105,6 +105,7 @@ public class BuildAgentClient implements Closeable {
         try {
             log.debug("Sending remote command...");
             remoteEndpoint.sendBinary(byteBuffer);
+            log.debug("Command sent.");
             isCommandPromptReady.set(false);
             commandSent = true;
         } catch (IOException e) {
@@ -113,7 +114,7 @@ public class BuildAgentClient implements Closeable {
     }
 
     public void executeNow(Object command) throws BuildAgentClientException { //TODO unify with executeCommand
-        log.info("Executing remote command [{}]...", command);
+        log.info("Executing remote command now [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
         ByteBuffer byteBuffer = prepareRemoteCommand(command);
@@ -121,6 +122,7 @@ public class BuildAgentClient implements Closeable {
         try {
             log.debug("Sending remote command...");
             remoteEndpoint.sendBinary(byteBuffer);
+            log.debug("Command sent.");
             isCommandPromptReady.set(false);
             commandSent = true;
         } catch (IOException e) {
