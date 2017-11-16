@@ -53,9 +53,12 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
     private final ScheduledExecutorService executor;
     private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
 
-    public WebSocketTtyConnection(ScheduledExecutorService executor) {
+    private Runnable onStdOutCompleted;
+
+    public WebSocketTtyConnection(ScheduledExecutorService executor, Runnable onStdOutCompleted) {
         super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
         this.executor = executor;
+        this.onStdOutCompleted = onStdOutCompleted;
     }
 
     protected void write(byte[] buffer) {
@@ -67,6 +70,10 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
             }
         }
         readonlyChannels.forEach((channel) -> channel.writeOutput(buffer));
+        if (new String(buffer).equals("% ")) {
+            log.info("Prompt ready.");
+            onStdOutCompleted.run();
+        }
     }
 
     @Override

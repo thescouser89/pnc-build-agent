@@ -69,7 +69,7 @@ public class UndertowBootstrap {
         String requestPath = exchange.getRequestPath();
 
         if (requestPath.startsWith(processUpdatePath)) {
-            log.debug("Connecting status listener ...");
+            log.info("Connecting status listener ...");
             String invokerContext = requestPath.replace(processUpdatePath, "");
             Term term = getTerm(invokerContext, appendReadOnlyChannel);
             term.webSocketStatusUpdateHandler().handleRequest(exchange);
@@ -77,11 +77,11 @@ public class UndertowBootstrap {
             ResponseMode responseMode;
             String invokerContext;
             if (requestPath.startsWith(stringTermPath)) {
-                log.debug("Connecting to string term ...");
+                log.info("Connecting to string term ...");
                 responseMode = ResponseMode.TEXT;
                 invokerContext = requestPath.replace(stringTermPath, "");
             } else {
-                log.debug("Connecting to binary term ...");
+                log.info("Connecting to binary term ...");
                 responseMode = ResponseMode.BINARY;
                 invokerContext = requestPath.replace(termPath, "");
             }

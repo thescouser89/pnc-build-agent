@@ -135,6 +135,7 @@ public class TestWebSocketConnection {
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
             if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) ) {
+                log.info("Received status COMPLETED.");
                 try {
                     assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
                 } catch (TimeoutException | InterruptedException e) {
@@ -147,11 +148,11 @@ public class TestWebSocketConnection {
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context);
 
         buildAgentClient.executeCommand(getTestCommand(100, 0));
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
         completed.set(false);
 
-        buildAgentClient.executeCommand(getTestCommand(100, 0));
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        buildAgentClient.executeCommand(getTestCommand(100, 0, "2nd-command."));
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout.");
         completed.set(false);
 
         buildAgentClient.close();
@@ -334,6 +335,14 @@ public class TestWebSocketConnection {
     }
 
     private String getTestCommand(int repeat, int delaySec) {
-        return TEST_COMMAND_BASE + " " + repeat + " " + delaySec;
+        return getTestCommand(repeat, delaySec, "");
+    }
+
+    private String getTestCommand(int repeat, int delaySec, String customMessage) {
+        String command = TEST_COMMAND_BASE + " " + repeat + " " + delaySec;
+        if (customMessage != null && !customMessage.equals("")) {
+            command = command + " " + customMessage;
+        }
+        return command;
     }
 }

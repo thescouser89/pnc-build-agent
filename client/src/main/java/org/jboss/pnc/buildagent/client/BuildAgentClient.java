@@ -23,8 +23,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
-import org.jboss.pnc.buildagent.common.ObjectWrapper;
-import org.jboss.pnc.buildagent.common.Wait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +33,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -53,12 +50,9 @@ public class BuildAgentClient implements Closeable {
     private final ResponseMode responseMode;
     private final boolean readOnly;
 
-    ObjectWrapper<Boolean> isCommandPromptReady = new ObjectWrapper<>(false);
-
     private Client statusUpdatesClient;
     private Client commandExecutingClient;
     private Optional<Runnable> onCommandExecutionCompleted = Optional.empty();
-    private boolean commandSent;
 
     public BuildAgentClient(String termBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
@@ -97,17 +91,9 @@ public class BuildAgentClient implements Closeable {
         ByteBuffer byteBuffer = prepareRemoteCommand(command);
 
         try {
-            waitCommandPromptReady();
-        } catch (InterruptedException e) {
-            log.error("Interrupted while waiting for command prompt ready state.", e);
-        }
-
-        try {
             log.debug("Sending remote command...");
             remoteEndpoint.sendBinary(byteBuffer);
             log.debug("Command sent.");
-            isCommandPromptReady.set(false);
-            commandSent = true;
         } catch (IOException e) {
             log.error("Cannot execute remote command.", e);
         }
@@ -123,8 +109,6 @@ public class BuildAgentClient implements Closeable {
             log.debug("Sending remote command...");
             remoteEndpoint.sendBinary(byteBuffer);
             log.debug("Command sent.");
-            isCommandPromptReady.set(false);
-            commandSent = true;
         } catch (IOException e) {
             log.error("Cannot execute remote command.", e);
         }
@@ -235,39 +219,16 @@ public class BuildAgentClient implements Closeable {
     private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
-            if ("% ".equals(responseData)) {
-                log.info("Binary consumer received command line 'ready'(%) marker.");
-                onCommandPromptReady();
-            } else {
-                responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
-            }
+            responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
         };
         client.onBinaryMessage(responseConsumer);
     }
 
     private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
         Consumer<String> responseConsumer = (string) -> {
-            if ("% ".equals(string)) {
-                log.info("Text consumer received command line 'ready'(%) marker.");
-                onCommandPromptReady();
-            } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(string));;
-            }
         };
         client.onStringMessage(responseConsumer);
-    }
-
-    private void onCommandPromptReady() {
-        isCommandPromptReady.set(true);
-        if (commandSent) {
-            onCommandExecutionCompleted.ifPresent((completed) -> completed.run());
-        }
-    }
-
-    private void waitCommandPromptReady() throws TimeoutException, InterruptedException {
-        log.trace("Waiting for commandPromptReady ... ");
-        Wait.forCondition(() -> isCommandPromptReady.get(), 15, ChronoUnit.SECONDS, "Command prompt was not ready.");
-        log.debug("CommandPromptReady.");
     }
 
     private static Client initializeDefault() {

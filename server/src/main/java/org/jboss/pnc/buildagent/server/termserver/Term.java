@@ -58,12 +58,18 @@ class Term {
     private boolean activeCommand;
     private Optional<ReadOnlyChannel> appendReadOnlyChannel;
 
+    CompleteHandler completeHandle = new CompleteHandler();
+
     public Term(String context, Runnable onDestroy, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
         this.context = context;
         this.onDestroy = onDestroy;
         this.appendReadOnlyChannel = appendReadOnlyChannel;
 
-        webSocketTtyConnection = new WebSocketTtyConnection(executor);
+        Runnable onStdOutCompleted = () -> {
+            completeHandle.setStdoutCompletedAndRun();
+        };
+
+        webSocketTtyConnection = new WebSocketTtyConnection(executor, onStdOutCompleted);
         appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
         log.debug("Creating new TtyBridge.");
     }
@@ -111,12 +117,23 @@ class Term {
         if (event.getNewStatus().isFinal()) {
             activeCommand = false;
             log.debug("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
-            writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
-            destroyIfInactiveAndDisconnected();
+            completeHandle.setCompletionEventAndRun(event);
         } else {
             log.debug("Setting command active flag [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
             activeCommand = true;
+            completeHandle.reset();
+            //notify only for non final statuses, final status have to wait for log completion. Is called in #complete
+            notifyStatusUpdateListeners(event);
         }
+    }
+
+    private void complete(TaskStatusUpdateEvent event) {
+        writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
+        destroyIfInactiveAndDisconnected();
+        notifyStatusUpdateListeners(event);
+    }
+
+    private void notifyStatusUpdateListeners(TaskStatusUpdateEvent event) {
         for (Consumer<TaskStatusUpdateEvent> statusUpdateListener : statusUpdateListeners) {
             log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, event.getTaskId(), event.getNewStatus());
             statusUpdateListener.accept(event);
@@ -198,4 +215,35 @@ class Term {
 
         return new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
     }
+
+    private class CompleteHandler {
+        boolean stdoutCompleted;
+        TaskStatusUpdateEvent completionEvent;
+
+        public synchronized void setStdoutCompletedAndRun() {
+            stdoutCompleted = true;
+            log.debug("Stdout completed, trying to run complete ...");
+            run();
+        }
+
+        public synchronized void setCompletionEventAndRun(TaskStatusUpdateEvent completionEvent) {
+            this.completionEvent = completionEvent;
+            log.debug("Completion event received, trying to run complete ...");
+            run();
+        }
+
+        private synchronized void run() {
+            if (completionEvent != null && stdoutCompleted) {
+                log.debug("Completing operation...");
+                complete(completionEvent);
+            }
+        }
+
+        public synchronized void reset() {
+            log.debug("Resetting CompleteHandler...");
+            stdoutCompleted = false;
+            completionEvent = null;
+        }
+    }
+
 }
