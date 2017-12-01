@@ -65,10 +65,15 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
         if (isOpen()) {
             if (ResponseMode.TEXT.equals(responseMode)) {
                 WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
-            } else {
+            } else if (ResponseMode.BINARY.equals(responseMode)) {
                 WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+            } else if (ResponseMode.SILENT.equals(responseMode)) {
+                //do not send the response
+            } else {
+                log.error("Invalid response mode.");
             }
         }
+        //TODO hood into PtyMaster directly
         readonlyChannels.forEach((channel) -> channel.writeOutput(buffer));
         if (new String(buffer).equals("% ")) {
             log.info("Prompt ready.");

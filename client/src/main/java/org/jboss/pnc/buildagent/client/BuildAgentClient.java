@@ -84,11 +84,11 @@ public class BuildAgentClient implements Closeable {
         this.onCommandExecutionCompleted = Optional.of(commandCompletionListener);
     }
 
-    public void executeCommand(String command) throws TimeoutException, BuildAgentClientException {
+    public void executeCommand(String command, boolean silent) throws TimeoutException, BuildAgentClientException {
         log.info("Executing remote command [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
-        ByteBuffer byteBuffer = prepareRemoteCommand(command);
+        ByteBuffer byteBuffer = prepareRemoteCommand(command, silent);
 
         try {
             log.debug("Sending remote command...");
@@ -99,11 +99,11 @@ public class BuildAgentClient implements Closeable {
         }
     }
 
-    public void executeNow(Object command) throws BuildAgentClientException { //TODO unify with executeCommand
+    public void executeNow(Object command, boolean silent) throws BuildAgentClientException { //TODO unify with executeCommand
         log.info("Executing remote command now [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
-        ByteBuffer byteBuffer = prepareRemoteCommand(command);
+        ByteBuffer byteBuffer = prepareRemoteCommand(command, silent);
 
         try {
             log.debug("Sending remote command...");
@@ -114,9 +114,13 @@ public class BuildAgentClient implements Closeable {
         }
     }
 
-    private ByteBuffer prepareRemoteCommand(Object command) throws BuildAgentClientException {
+    private ByteBuffer prepareRemoteCommand(Object command, boolean silent) throws BuildAgentClientException {
         Map<String, Object> cmdJson = new HashMap<>();
-        cmdJson.put("action", "read");
+        if (silent) {
+            cmdJson.put("action", "execute-only");
+        } else {
+            cmdJson.put("action", "read");
+        }
 
         ByteBuffer byteBuffer;
         if (command instanceof String) {

@@ -70,6 +70,7 @@ class Term {
         };
 
         webSocketTtyConnection = new WebSocketTtyConnection(executor, onStdOutCompleted);
+        //TODO hook into PnyMaster directly
         appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
         log.debug("Creating new TtyBridge.");
     }
@@ -86,6 +87,12 @@ class Term {
                 ttyBridge.setProcessStdinListener((commandLine) -> {
                     log.debug("New command received: {}", commandLine);
                 });
+                //TODO hook RO channels
+//                Optional<ReadOnlyChannel> appendReadOnlyChannel = null;
+//                appendReadOnlyChannel.ifPresent(ch ->
+//                        ttyBridge.setProcessStdoutListener((ints) -> ch.writeOutput(toBytes(ints)));
+//                );
+
                 ttyBridgeInitialized = true;
             }
         }
