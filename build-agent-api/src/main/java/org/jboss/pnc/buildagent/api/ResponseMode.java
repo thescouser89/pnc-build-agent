@@ -22,5 +22,5 @@ package org.jboss.pnc.buildagent.api;
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public enum ResponseMode {
-    TEXT, BINARY;
+    TEXT, BINARY, SILENT;
 }

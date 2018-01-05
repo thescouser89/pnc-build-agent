@@ -84,11 +84,11 @@ public class BuildAgentClient implements Closeable {
         this.onCommandExecutionCompleted = Optional.of(commandCompletionListener);
     }
 
-    public void executeCommand(String command, boolean silent) throws TimeoutException, BuildAgentClientException {
+    public void executeCommand(String command) throws TimeoutException, BuildAgentClientException {
         log.info("Executing remote command [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
-        ByteBuffer byteBuffer = prepareRemoteCommand(command, silent);
+        ByteBuffer byteBuffer = prepareRemoteCommand(command);
 
         try {
             log.debug("Sending remote command...");
@@ -103,7 +103,7 @@ public class BuildAgentClient implements Closeable {
         log.info("Executing remote command now [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
-        ByteBuffer byteBuffer = prepareRemoteCommand(command, silent);
+        ByteBuffer byteBuffer = prepareRemoteCommand(command);
 
         try {
             log.debug("Sending remote command...");
@@ -114,13 +114,9 @@ public class BuildAgentClient implements Closeable {
         }
     }
 
-    private ByteBuffer prepareRemoteCommand(Object command, boolean silent) throws BuildAgentClientException {
+    private ByteBuffer prepareRemoteCommand(Object command) throws BuildAgentClientException {
         Map<String, Object> cmdJson = new HashMap<>();
-        if (silent) {
-            cmdJson.put("action", "execute-only");
-        } else {
-            cmdJson.put("action", "read");
-        }
+        cmdJson.put("action", "read");
 
         ByteBuffer byteBuffer;
         if (command instanceof String) {
@@ -182,8 +178,10 @@ public class BuildAgentClient implements Closeable {
 
         if (ResponseMode.TEXT.equals(responseMode)) {
             registerTextResponseConsumer(responseDataConsumer, client);
-        } else {
+        } else if (ResponseMode.BINARY.equals(responseMode)) {
             registerBinaryResponseConsumer(responseDataConsumer, client);
+        } else {
+            //must be silent mode
         }
 
         client.onClose(closeReason -> {
@@ -195,8 +193,10 @@ public class BuildAgentClient implements Closeable {
         String webSocketPath;
         if (ResponseMode.TEXT.equals(responseMode)) {
             webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_TEXT_PATH;
-        } else {
+        } else if (ResponseMode.BINARY.equals(responseMode)) {
             webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_PATH;
+        } else {
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_SILENT_PATH;
         }
 
         commandContext = formatCommandContext(commandContext);

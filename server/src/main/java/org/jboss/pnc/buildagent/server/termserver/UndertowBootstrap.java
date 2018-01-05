@@ -57,7 +57,7 @@ public class UndertowBootstrap {
     public void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
         server = Undertow.builder()
                 .addHttpListener(port, host)
-                .setHandler((exchange) -> handleWebSocketRequests(exchange, Configurations.TERM_PATH, Configurations.TERM_PATH_TEXT, Configurations.PROCESS_UPDATES_PATH))
+                .setHandler((exchange) -> handleWebSocketRequests(exchange, Configurations.TERM_PATH, Configurations.TERM_PATH_TEXT, Configurations.TERM_PATH_SILENT, Configurations.PROCESS_UPDATES_PATH))
                 .build();
 
         server.start();
@@ -65,7 +65,7 @@ public class UndertowBootstrap {
         completionHandler.accept(true);
     }
 
-    protected void handleWebSocketRequests(HttpServerExchange exchange, String termPath, String stringTermPath, String processUpdatePath) throws Exception {
+    protected void handleWebSocketRequests(HttpServerExchange exchange, String termPath, String stringTermPath, String silentTermPath, String processUpdatePath) throws Exception {
         String requestPath = exchange.getRequestPath();
 
         if (requestPath.startsWith(processUpdatePath)) {
@@ -80,6 +80,10 @@ public class UndertowBootstrap {
                 log.info("Connecting to string term ...");
                 responseMode = ResponseMode.TEXT;
                 invokerContext = requestPath.replace(stringTermPath, "");
+            } else if (requestPath.startsWith(silentTermPath)) {
+                log.info("Connecting to silent term ...");
+                responseMode = ResponseMode.SILENT;
+                invokerContext = requestPath.replace(silentTermPath, "");
             } else {
                 log.info("Connecting to binary term ...");
                 responseMode = ResponseMode.BINARY;
@@ -105,7 +109,6 @@ public class UndertowBootstrap {
         log.info("Creating new term for context [{}].", invokerContext);
         Runnable onDestroy = () -> terms.remove(invokerContext);
         Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannel);
-
         return term;
     }
 

@@ -25,5 +25,7 @@ public class Configurations {
   public static final String HOST = "localhost";
   public static final String TERM_PATH = "/term";
   public static final String TERM_PATH_TEXT = "/text";
+  public static final String TERM_PATH_SILENT = "/silent";
+
   public static final String PROCESS_UPDATES_PATH = "/process-status-updates";
 }

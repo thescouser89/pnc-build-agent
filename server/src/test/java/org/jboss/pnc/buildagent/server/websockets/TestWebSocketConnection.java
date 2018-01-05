@@ -18,14 +18,14 @@
 
 package org.jboss.pnc.buildagent.server.websockets;
 
-import org.jboss.pnc.buildagent.server.MockProcess;
-import org.jboss.pnc.buildagent.server.TermdServer;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.Status;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.client.BuildAgentClient;
 import org.jboss.pnc.buildagent.common.ObjectWrapper;
 import org.jboss.pnc.buildagent.common.Wait;
+import org.jboss.pnc.buildagent.server.MockProcess;
+import org.jboss.pnc.buildagent.server.TermdServer;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -78,7 +78,6 @@ public class TestWebSocketConnection {
         TermdServer.stopServer();
         log.debug("Deleting log file {}", logFile);
         logFile.delete();
-
     }
 
     @Test
@@ -159,6 +158,37 @@ public class TestWebSocketConnection {
     }
 
     @Test
+    public void shouldExecuteTwoTasksInSilentMode() throws Exception {
+
+        String context = this.getClass().getName() + ".shouldExecuteTwoTasksInSilentMode";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) ) {
+                log.info("Received status COMPLETED.");
+                try {
+                    assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                } catch (TimeoutException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                completed.set(true);
+            }
+        };
+
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.SILENT, false);
+
+        buildAgentClient.executeCommand(getTestCommand(100, 0));
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
+        completed.set(false);
+
+        buildAgentClient.executeCommand(getTestCommand(100, 0, "2nd-command."));
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout.");
+        completed.set(false);
+
+        buildAgentClient.close();
+    }
+
+    @Test
     public void clientShouldBeAbleToConnectToRunningProcess() throws Exception {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcess";
 
@@ -219,6 +249,42 @@ public class TestWebSocketConnection {
     }
 
     @Test
+    public void clientShouldBeAbleToExecuteCommandWithoutListeningToResponse() throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToExecuteCommandWithoutListeningToResponse";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
+                completed.set(true);
+            }
+        };
+
+        final StringBuilder response = new StringBuilder();
+        Consumer<String> onResponse = (message) -> {
+            response.append(message);
+        };
+        final StringBuilder silentResponse = new StringBuilder();
+        Consumer<String> onSilentResponse = (message) -> {
+            silentResponse.append(message);
+        };
+        BuildAgentClient buildAgentClientListener = new BuildAgentClient(terminalBaseUrl, Optional.of(onResponse), (event) -> {}, context, ResponseMode.TEXT, true);
+        //connect executing client
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.of(onSilentResponse), onStatusUpdate, context, ResponseMode.SILENT, false);
+        buildAgentClient.executeCommand(getTestCommand(100, 0));
+
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+//        wait to make sure async Websocket data has been transferred
+        Wait.forCondition(() -> {
+            return response.toString().contains("I'm done.");
+        }, 3, ChronoUnit.SECONDS, "Missing or invalid response.");
+
+        Assert.assertEquals(0, silentResponse.length());
+
+//        buildAgentClientListener.close();
+        buildAgentClient.close();
+    }
+
+    @Test
     public void clientShouldBeAbleToConnectAndListenForOutputBeforeTheProcessStart() throws Exception {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
 
@@ -229,7 +295,7 @@ public class TestWebSocketConnection {
             }
         };
 
-        StringBuilder response = new StringBuilder();
+        final StringBuilder response = new StringBuilder();
         Consumer<String> onResponse = (message) -> {
             response.append(message);
         };
@@ -239,7 +305,10 @@ public class TestWebSocketConnection {
         buildAgentClient.executeCommand(getTestCommand(100, 0));
 
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
-        Wait.forCondition(() -> response.toString().contains("I'm done."), 3, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
+        //wait to make sure async Websocket data has been transferred
+        Wait.forCondition(() -> {
+            return response.toString().contains("I'm done.");
+        }, 3, ChronoUnit.SECONDS, "Missing or invalid response.");
 
         buildAgentClientListener.close();
         buildAgentClient.close();

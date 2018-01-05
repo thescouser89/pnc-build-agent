@@ -26,7 +26,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -42,8 +41,6 @@ public class IoLogger implements Closeable {
     FileOutputStream stream;
 
     public IoLogger(Path logFolder) {
-        Optional<FileOutputStream> fileOutputStream = Optional.empty();
-
         try {
             Path logPath = logFolder.resolve("console.log");
 

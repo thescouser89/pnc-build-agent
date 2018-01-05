@@ -116,6 +116,7 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
                 exchange,
                 socketPath + Configurations.TERM_PATH,
                 socketPath + Configurations.TERM_PATH_TEXT,
+                socketPath + Configurations.TERM_PATH_SILENT,
                 socketPath + Configurations.PROCESS_UPDATES_PATH);
     }
 

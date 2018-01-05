@@ -39,8 +39,9 @@ import java.util.function.Consumer;
  */
 public class Client {
 
-    public static final String WEB_SOCKET_TERMINAL_PATH = "/socket/term";
+    public static final String WEB_SOCKET_TERMINAL_PATH = "/socket/term"; //TODO use Configuration class
     public static final String WEB_SOCKET_TERMINAL_TEXT_PATH = "/socket/text";
+    public static final String WEB_SOCKET_TERMINAL_SILENT_PATH = "/socket/silent";;
     public static final String WEB_SOCKET_LISTENER_PATH = "/socket/process-status-updates";
 
     private static final Logger log = LoggerFactory.getLogger(Client.class);

@@ -27,14 +27,16 @@ import io.undertow.server.HttpHandler;
 import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.CloseMessage;
+import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.common.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -56,23 +58,21 @@ class Term {
     final Set<Consumer<TaskStatusUpdateEvent>> statusUpdateListeners = new HashSet<>();
     private WebSocketTtyConnection webSocketTtyConnection;
     private boolean activeCommand;
-    private Optional<ReadOnlyChannel> appendReadOnlyChannel;
 
     CompleteHandler completeHandle = new CompleteHandler();
+
+    private final Set<ReadOnlyChannel> readOnlyChannels = new HashSet<>();
 
     public Term(String context, Runnable onDestroy, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
         this.context = context;
         this.onDestroy = onDestroy;
-        this.appendReadOnlyChannel = appendReadOnlyChannel;
+        appendReadOnlyChannel.ifPresent(ch -> readOnlyChannels.add(ch));
 
         Runnable onStdOutCompleted = () -> {
             completeHandle.setStdoutCompletedAndRun();
         };
-
         webSocketTtyConnection = new WebSocketTtyConnection(executor, onStdOutCompleted);
-        //TODO hook into PnyMaster directly
-        appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
-        log.debug("Creating new TtyBridge.");
+        log.debug("Created new Term: {}.", this);
     }
 
     private volatile Boolean ttyBridgeInitialized = false;
@@ -82,17 +82,13 @@ class Term {
             if (!ttyBridgeInitialized) {
                 TtyBridge ttyBridge = new TtyBridge(webSocketTtyConnection);
                 ttyBridge
-                        .setProcessListener(onTaskCreated())
-                        .readline();
-                ttyBridge.setProcessStdinListener((commandLine) -> {
-                    log.debug("New command received: {}", commandLine);
-                });
-                //TODO hook RO channels
-//                Optional<ReadOnlyChannel> appendReadOnlyChannel = null;
-//                appendReadOnlyChannel.ifPresent(ch ->
-//                        ttyBridge.setProcessStdoutListener((ints) -> ch.writeOutput(toBytes(ints)));
-//                );
-
+                    .setProcessListener(onTaskCreated())
+                    .setProcessStdoutListener(ints -> onStdOut(ints))
+                    .setProcessStdinListener((commandLine) -> {
+                        log.debug("New command received: {}", commandLine);
+                        onStdIn(commandLine);
+                    })
+                    .readline();
                 ttyBridgeInitialized = true;
             }
         }
@@ -126,7 +122,7 @@ class Term {
             log.debug("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
             completeHandle.setCompletionEventAndRun(event);
         } else {
-            log.debug("Setting command active flag [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
+            log.debug("Setting command active flag [context:{} taskId:{}] Notifying status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
             activeCommand = true;
             completeHandle.reset();
             //notify only for non final statuses, final status have to wait for log completion. Is called in #complete
@@ -149,7 +145,7 @@ class Term {
 
     private void writeCompletedToReadonlyChannel(Status newStatus) {
         String completed = "% # Finished with status: " + newStatus + "\n";
-        appendReadOnlyChannel.ifPresent(ch -> ch.writeOutput(completed.getBytes(Charset.forName("UTF-8"))));
+        readOnlyChannels.forEach(ch -> ch.writeOutput(completed.getBytes(StandardCharsets.US_ASCII)));
     }
 
     private void destroyIfInactiveAndDisconnected() {
@@ -160,17 +156,10 @@ class Term {
     }
 
     HttpHandler getWebSocketHandler(ResponseMode responseMode, boolean readOnly) {
-        //TODO unify appendReadonlyChannel and webSocketTtyConnection.addReadonlyChannel
         WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
             if (!readOnly) {
                 if (webSocketTtyConnection.isOpen()) {
-                    log.info("Closing connection because there is already active master connection.");
-                    webSocketChannel.setCloseReason("Already active master connection.");
-                    try {
-                        webSocketChannel.sendClose();
-                    } catch (IOException e) {
-                        log.warn("Cannot reject connection.");
-                    }
+                    rejectDueToAlreadyActive(webSocketChannel);
                 }
                 log.info("Adding new master connection from remote address {} to context [{}].", webSocketChannel.getSourceAddress().toString(), context);
                 webSocketTtyConnection.setWebSocketChannel(webSocketChannel, responseMode);
@@ -188,9 +177,10 @@ class Term {
                     log.info("Adding new readonly binary consumer connection from remote address {} to context [{}].", webSocketChannel.getSourceAddress().toString(), context);
                     readOnlyChannel = new ReadOnlyWebSocketChannel(webSocketChannel);
                 }
-                webSocketTtyConnection.addReadonlyChannel(readOnlyChannel);
+                readOnlyChannels.add(readOnlyChannel);
                 webSocketChannel.addCloseTask((task) -> {
-                    webSocketTtyConnection.removeReadonlyChannel(readOnlyChannel);
+                    log.debug("Removing RO channel: {}.", readOnlyChannel);
+                    readOnlyChannels.remove(readOnlyChannel);
                     destroyIfInactiveAndDisconnected();
                 });
             }
@@ -221,6 +211,30 @@ class Term {
         };
 
         return new WebSocketProtocolHandshakeHandler(webSocketConnectionCallback);
+    }
+
+    private void rejectDueToAlreadyActive(WebSocketChannel webSocketChannel) {
+        log.info("Closing connection because there is already active master connection.");
+        webSocketChannel.setCloseReason("Already active master connection.");
+        try {
+            webSocketChannel.sendClose();
+        } catch (IOException e) {
+            log.warn("Cannot reject connection.", e);
+        }
+    }
+
+    private void onStdIn(String stdIn) {
+        for (ReadOnlyChannel ch : readOnlyChannels) {
+            ch.writeOutput(stdIn.getBytes());
+        }
+    }
+
+    private void onStdOut(int[] stdOut) {
+        for (ReadOnlyChannel readOnlyChannel : readOnlyChannels) {
+            byte[] buffer = Arrays.toBytes(stdOut);
+            log.trace("Writing to chanel {}; stdout: {}", readOnlyChannel, new String(buffer));
+            readOnlyChannel.writeOutput(buffer);
+        }
     }
 
     private class CompleteHandler {
