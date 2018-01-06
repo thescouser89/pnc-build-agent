@@ -53,7 +53,7 @@
     <module>client</module>
     <module>server</module>
     <module>common</module>
-    <module>build-agent-api</module>
+    <module>api</module>
   </modules>
 
   <dependencyManagement>

@@ -32,6 +32,7 @@ import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.common.Arrays;
+import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +50,7 @@ import java.util.function.Consumer;
  * @author <a href="mailto:julien@julienviet.com">Julien Viet</a>
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-class Term {
+public class Term {
 
     private Logger log = LoggerFactory.getLogger(Term.class);
 
@@ -145,7 +146,7 @@ class Term {
 
     private void writeCompletedToReadonlyChannel(Status newStatus) {
         String completed = "% # Finished with status: " + newStatus + "\n";
-        readOnlyChannels.forEach(ch -> ch.writeOutput(completed.getBytes(StandardCharsets.US_ASCII)));
+        readOnlyChannels.forEach(ch -> ch.writeOutput(completed.getBytes(StandardCharsets.UTF_8)));
     }
 
     private void destroyIfInactiveAndDisconnected() {
@@ -155,7 +156,7 @@ class Term {
         }
     }
 
-    HttpHandler getWebSocketHandler(ResponseMode responseMode, boolean readOnly) {
+    public HttpHandler getWebSocketHandler(ResponseMode responseMode, boolean readOnly) {
         WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
             if (!readOnly) {
                 if (webSocketTtyConnection.isOpen()) {
@@ -188,7 +189,7 @@ class Term {
         return new WebSocketProtocolHandshakeHandler(onWebSocketConnected);
     }
 
-    HttpHandler webSocketStatusUpdateHandler() {
+    public HttpHandler webSocketStatusUpdateHandler() {
         WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
             Consumer<TaskStatusUpdateEvent> statusUpdateListener = event -> {
                 Map<String, Object> statusUpdate = new HashMap<>();

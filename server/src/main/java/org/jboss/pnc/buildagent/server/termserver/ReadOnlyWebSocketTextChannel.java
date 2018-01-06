@@ -22,6 +22,7 @@ import io.undertow.websockets.core.WebSocketCallback;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.common.StringLiner;
+import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +44,7 @@ public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
 
     @Override
     public void writeOutput(byte[] buffer) {
-        String string = new String(buffer, StandardCharsets.US_ASCII);
+        String string = new String(buffer, StandardCharsets.UTF_8);
         log.trace("Appending to message [{}], raw [{}]", string, buffer);
         stringLiner.append(string);
         String line;

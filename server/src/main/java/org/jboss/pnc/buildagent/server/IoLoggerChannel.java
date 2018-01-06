@@ -18,7 +18,6 @@
 
 package org.jboss.pnc.buildagent.server;
 
-import org.jboss.pnc.buildagent.server.termserver.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,10 +30,10 @@ public class IoLoggerChannel implements ReadOnlyChannel {
 
     private static final Logger log = LoggerFactory.getLogger(IoLoggerChannel.class);
 
-    final IoLogger ioLogger;
+    final IoFileLogger ioLogger;
 
     public IoLoggerChannel(Path logPath) {
-        ioLogger = new IoLogger(logPath);
+        ioLogger = new IoFileLogger(logPath);
     }
 
     @Override
