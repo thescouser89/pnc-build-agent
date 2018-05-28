@@ -26,11 +26,13 @@ import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.websocket.ClientEndpointConfig;
 import javax.websocket.CloseReason;
-import javax.websocket.RemoteEndpoint;
+import javax.websocket.ContainerProvider;
 import javax.websocket.Session;
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -50,8 +52,8 @@ public class BuildAgentClient implements Closeable {
     private final ResponseMode responseMode;
     private final boolean readOnly;
 
-    private Client statusUpdatesClient;
-    private Client commandExecutingClient;
+    private RemoteEndpoint statusUpdatesEndpoint;
+    private RemoteEndpoint commandExecutingEndpoint;
 
     public BuildAgentClient(String termBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
@@ -75,8 +77,8 @@ public class BuildAgentClient implements Closeable {
             onStatusUpdate.accept(event);
         };
 
-        statusUpdatesClient = connectStatusListenerClient(termBaseUrl, onStatusUpdateInternal, commandContext);
-        commandExecutingClient = connectCommandExecutingClient(termBaseUrl, responseDataConsumer, commandContext);
+        statusUpdatesEndpoint = connectStatusListenerClient(termBaseUrl, onStatusUpdateInternal, commandContext);
+        commandExecutingEndpoint = connectCommandExecutingClient(termBaseUrl, responseDataConsumer, commandContext);
     }
 
     public void executeCommand(String command) throws BuildAgentClientException {
@@ -85,7 +87,7 @@ public class BuildAgentClient implements Closeable {
 
     public void execute(Object command) throws BuildAgentClientException {
         log.info("Executing remote command [{}]...", command);
-        RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
+        javax.websocket.RemoteEndpoint.Basic remoteEndpoint = commandExecutingEndpoint.getRemoteEndpoint();
 
         ByteBuffer byteBuffer = prepareRemoteCommand(command);
 
@@ -122,8 +124,8 @@ public class BuildAgentClient implements Closeable {
         return byteBuffer;
     }
 
-    private Client connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String commandContext) {
-        Client client = initializeDefault();
+    private RemoteEndpoint connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String commandContext) {
+        RemoteEndpoint client = initializeDefault();
         Consumer<String> responseConsumer = (text) -> {
             log.trace("Decoding response: {}", text);
 
@@ -143,22 +145,21 @@ public class BuildAgentClient implements Closeable {
         };
         client.onStringMessage(responseConsumer);
 
-        client.onClose(closeReason -> {
-        });
-
         commandContext = formatCommandContext(commandContext);
 
         try {
-            client.connect(stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_LISTENER_PATH + commandContext);
+            String websocketUrl = stripEndingSlash(webSocketBaseUrl) + RemoteEndpoint.WEB_SOCKET_LISTENER_PATH + commandContext;
+            ClientEndpointConfig clientEndpointConfig = ClientEndpointConfig.Builder.create().build();
+            ContainerProvider.getWebSocketContainer().connectToServer(client, clientEndpointConfig, new URI(websocketUrl));
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
         return client;
     }
 
-    private Client connectCommandExecutingClient(String webSocketBaseUrl, Optional<Consumer<String>> responseDataConsumer, String commandContext) throws InterruptedException, TimeoutException {
+    private RemoteEndpoint connectCommandExecutingClient(String webSocketBaseUrl, Optional<Consumer<String>> responseDataConsumer, String commandContext) throws InterruptedException, TimeoutException {
 
-        Client client = initializeDefault();
+        RemoteEndpoint client = initializeDefault();
 
         if (ResponseMode.TEXT.equals(responseMode)) {
             registerTextResponseConsumer(responseDataConsumer, client);
@@ -168,25 +169,23 @@ public class BuildAgentClient implements Closeable {
             //must be silent mode
         }
 
-        client.onClose(closeReason -> {
-            log.info("Client received close {}.", closeReason.toString());
-        });
-
         String appendReadOnly = readOnly ? "/ro" : "";
 
         String webSocketPath;
         if (ResponseMode.TEXT.equals(responseMode)) {
-            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_TEXT_PATH;
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + RemoteEndpoint.WEB_SOCKET_TERMINAL_TEXT_PATH;
         } else if (ResponseMode.BINARY.equals(responseMode)) {
-            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_PATH;
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + RemoteEndpoint.WEB_SOCKET_TERMINAL_PATH;
         } else {
-            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_SILENT_PATH;
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + RemoteEndpoint.WEB_SOCKET_TERMINAL_SILENT_PATH;
         }
 
         commandContext = formatCommandContext(commandContext);
 
         try {
-            client.connect(webSocketPath + commandContext + appendReadOnly);
+            String websocketUrl = webSocketPath + commandContext + appendReadOnly;
+            ClientEndpointConfig clientEndpointConfig = ClientEndpointConfig.Builder.create().build();
+            ContainerProvider.getWebSocketContainer().connectToServer(client, clientEndpointConfig, new URI(websocketUrl));
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
@@ -204,7 +203,7 @@ public class BuildAgentClient implements Closeable {
         return path.replaceAll("/$", "");
     }
 
-    private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
+    private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, RemoteEndpoint client) {
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
             responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
@@ -212,15 +211,14 @@ public class BuildAgentClient implements Closeable {
         client.onBinaryMessage(responseConsumer);
     }
 
-    private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
+    private void registerTextResponseConsumer(Optional<Consumer<String>> responseDataConsumer, RemoteEndpoint client) {
         Consumer<String> responseConsumer = (string) -> {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(string));;
         };
         client.onStringMessage(responseConsumer);
     }
 
-    private static Client initializeDefault() {
-        Client client = new Client();
+    private static RemoteEndpoint initializeDefault() {
 
         Consumer<Session> onOpen = (session) -> {
             log.info("Client connection opened.");
@@ -230,8 +228,10 @@ public class BuildAgentClient implements Closeable {
             log.info("Client connection closed. " + closeReason);
         };
 
-        client.onOpen(onOpen);
-        client.onClose(onClose);
+        Consumer<Throwable> onError = (throwable) -> {
+            log.error("An error occurred in websocket client.", throwable);
+        };
+        RemoteEndpoint client = new RemoteEndpoint(onOpen, onClose, onError);
 
         return client;
     }
@@ -239,8 +239,8 @@ public class BuildAgentClient implements Closeable {
     @Override
     public void close() throws IOException {
         try {
-            commandExecutingClient.close();
-            statusUpdatesClient.close();
+            commandExecutingEndpoint.close();
+            statusUpdatesEndpoint.close();
         } catch (Exception e) {
             log.error("Cannot close client.", e);
         }
