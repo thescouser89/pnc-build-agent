@@ -279,6 +279,38 @@ public class TestWebSocketConnection {
     }
 
     @Test
+    public void textClientShouldReciveOutputWhenCommandStartedInSilentMode() throws Exception {
+        String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
+
+        ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED)) {
+                completed.set(true);
+            }
+        };
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.SILENT, false);
+        buildAgentClient.executeCommand(getTestCommand(100, 10));
+
+        StringBuilder response = new StringBuilder();
+        Consumer<String> onResponse = (message) -> {
+            response.append(message);
+        };
+        BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(
+                terminalBaseUrl,
+                Optional.of(onResponse),
+                (event) -> {},
+                context,
+                ResponseMode.TEXT,
+                true);
+
+        Wait.forCondition(() -> completed.get(), 15, ChronoUnit.SECONDS, "Operation did not complete within given timeout.");
+        Wait.forCondition(() -> response.toString().contains("I'm done."), 5, ChronoUnit.SECONDS, "Missing or invalid response: " + response.toString());
+
+        buildAgentClientReconnected.close();
+        buildAgentClient.close();
+    }
+
+    @Test
     public void clientShouldBeAbleToExecuteCommandWithoutListeningToResponse() throws Exception {
         String context = this.getClass().getName() + ".clientShouldBeAbleToExecuteCommandWithoutListeningToResponse";
 
