@@ -1,6 +1,6 @@
 /*
  * JBoss, Home of Professional Open Source.
- * Copyright 2015 Red Hat, Inc., and individual contributors
+ * Copyright 2016 Red Hat, Inc., and individual contributors
  * as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-package org.jboss.pnc.buildagent.server.termserver;
+package org.jboss.pnc.buildagent.api;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public interface ReadOnlyChannel {
-    void writeOutput(byte[] buffer);
+public enum ResponseMode {
+    TEXT, BINARY, SILENT;
 }

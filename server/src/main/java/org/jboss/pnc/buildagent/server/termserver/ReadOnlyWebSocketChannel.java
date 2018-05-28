@@ -20,6 +20,7 @@ package org.jboss.pnc.buildagent.server.termserver;
 
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
+import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 
 import java.nio.ByteBuffer;
 

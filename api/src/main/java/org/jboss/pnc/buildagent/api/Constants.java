@@ -1,6 +1,6 @@
 /*
  * JBoss, Home of Professional Open Source.
- * Copyright 2016 Red Hat, Inc., and individual contributors
+ * Copyright 2015 Red Hat, Inc., and individual contributors
  * as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,13 @@ package org.jboss.pnc.buildagent.api;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public enum ResponseMode {
-    TEXT, BINARY;
+public class Constants {
+  public static final String HTTP_PATH = "/";
+  public static final String SOCKET_PATH = "/socket";
+  public static final String SERVLET_PATH = "/servlet";
+  public static final String TERM_PATH = "/term";
+  public static final String TERM_PATH_TEXT = "/text";
+
+  public static final String TERM_PATH_SILENT = "/silent";
+  public static final String PROCESS_UPDATES_PATH = "/process-status-updates";
 }

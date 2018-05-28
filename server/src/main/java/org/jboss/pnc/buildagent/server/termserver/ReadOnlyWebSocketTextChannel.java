@@ -18,8 +18,11 @@
 
 package org.jboss.pnc.buildagent.server.termserver;
 
+import io.undertow.websockets.core.WebSocketCallback;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
+import org.jboss.pnc.buildagent.common.StringLiner;
+import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,24 +33,35 @@ import java.nio.charset.StandardCharsets;
  */
 public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
 
-    private Logger log = LoggerFactory.getLogger(ReadOnlyWebSocketTextChannel.class);
+    private static final Logger log = LoggerFactory.getLogger(ReadOnlyWebSocketTextChannel.class);
 
     private WebSocketChannel webSocketChannel;
-    private StringBuilder stringBuilder;
+    private final StringLiner stringLiner = new StringLiner();
 
     public ReadOnlyWebSocketTextChannel(WebSocketChannel webSocketChannel) {
         this.webSocketChannel = webSocketChannel;
-        stringBuilder = new StringBuilder();
     }
 
     @Override
     public void writeOutput(byte[] buffer) {
         String string = new String(buffer, StandardCharsets.UTF_8);
-        stringBuilder.append(string);
-        log.trace("sending string [{}], raw [{}]", string, buffer);
-        if (string.equals("\n") || string.equals("\r\n")) {
-            WebSockets.sendText(stringBuilder.toString(), webSocketChannel, null);
-            stringBuilder = new StringBuilder();
+        log.trace("Appending to message [{}], raw [{}]", string, buffer);
+        stringLiner.append(string);
+        String line;
+        while ((line = stringLiner.nextLine()) != null) {
+            log.trace("Sending message [{}]", line);
+            WebSockets.sendText(line, webSocketChannel, new WebSocketCallbackHandler());
+        }
+    }
+
+    private static class WebSocketCallbackHandler implements WebSocketCallback  {
+        @Override
+        public void complete(WebSocketChannel webSocketChannel, Object o) {
+        }
+
+        @Override
+        public void onError(WebSocketChannel webSocketChannel, Object o, Throwable throwable) {
+            log.error("Error sending to WebSocket channel.", throwable);
         }
     }
 }

@@ -35,8 +35,6 @@ import org.xnio.Pooled;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -51,22 +49,32 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
     private WebSocketChannel webSocketChannel;
     private ResponseMode responseMode;
     private final ScheduledExecutorService executor;
-    private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
 
-    public WebSocketTtyConnection(ScheduledExecutorService executor) {
+    private Runnable onStdOutCompleted;
+
+    public WebSocketTtyConnection(ScheduledExecutorService executor, Runnable onStdOutCompleted) {
         super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
         this.executor = executor;
+        this.onStdOutCompleted = onStdOutCompleted;
     }
 
     protected void write(byte[] buffer) {
         if (isOpen()) {
             if (ResponseMode.TEXT.equals(responseMode)) {
                 WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
-            } else {
+            } else if (ResponseMode.BINARY.equals(responseMode)) {
                 WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+            } else if (ResponseMode.SILENT.equals(responseMode)) {
+                //do not send the response
+                log.info("Master connection is in silent mode, no response will be sent over this channel.");
+            } else {
+                log.error("Invalid response mode.");
             }
         }
-        readonlyChannels.forEach((channel) -> channel.writeOutput(buffer));
+        if (new String(buffer).equals("% ")) {
+            log.info("Prompt ready.");
+            onStdOutCompleted.run();
+        }
     }
 
     @Override
@@ -119,14 +127,6 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
         this.responseMode = responseMode;
         registerWebSocketChannelListener(webSocketChannel);
         webSocketChannel.resumeReceives();
-    }
-
-    public void addReadonlyChannel(ReadOnlyChannel webSocketChannel) {
-        readonlyChannels.add(webSocketChannel);
-    }
-
-    public void removeReadonlyChannel(ReadOnlyChannel webSocketChannel) {
-        readonlyChannels.remove(webSocketChannel);
     }
 
     public void removeWebSocketChannel() {
