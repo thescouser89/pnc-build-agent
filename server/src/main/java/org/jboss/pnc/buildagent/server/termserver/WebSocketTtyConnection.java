@@ -52,6 +52,8 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
 
     private Runnable onStdOutCompleted;
 
+    private boolean logged;
+
     public WebSocketTtyConnection(ScheduledExecutorService executor, Runnable onStdOutCompleted) {
         super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
         this.executor = executor;
@@ -66,7 +68,7 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
                 WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
             } else if (ResponseMode.SILENT.equals(responseMode)) {
                 //do not send the response
-                log.info("Master connection is in silent mode, no response will be sent over this channel.");
+                logOnce("Master connection is in silent mode, no response will be sent over this channel.");
             } else {
                 log.error("Invalid response mode.");
             }
@@ -74,6 +76,13 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
         if (new String(buffer).equals("% ")) {
             log.info("Prompt ready.");
             onStdOutCompleted.run();
+        }
+    }
+
+    private void logOnce(String message) {
+        if (!logged) {
+            log.info(message);
+            logged = true;
         }
     }
 

@@ -11,7 +11,7 @@ public class StringLiner {
         stringBuffer.append(string);
     }
 
-    public String nextLine() {
+    public synchronized String nextLine() {
         int nlLength = 1;
         int nlPosition = stringBuffer.indexOf("\n");
         if (nlPosition == -1) {
