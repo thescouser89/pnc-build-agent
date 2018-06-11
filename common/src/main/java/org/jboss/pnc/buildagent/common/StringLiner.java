@@ -5,25 +5,25 @@ package org.jboss.pnc.buildagent.common;
  */
 public class StringLiner {
 
-    private final StringBuilder stringBuilder = new StringBuilder();
+    private final StringBuffer stringBuffer = new StringBuffer();
 
     public void append(String string) {
-        stringBuilder.append(string);
+        stringBuffer.append(string);
     }
 
     public String nextLine() {
         int nlLength = 1;
-        int nlPosition = stringBuilder.indexOf("\n");
+        int nlPosition = stringBuffer.indexOf("\n");
         if (nlPosition == -1) {
-            nlPosition = stringBuilder.indexOf("\r");
+            nlPosition = stringBuffer.indexOf("\r");
         }
         if (nlPosition == -1) {
-            nlPosition = stringBuilder.indexOf("\r\n");
+            nlPosition = stringBuffer.indexOf("\r\n");
             nlLength = 2;
         }
         if (nlPosition > -1) {
-            String line = stringBuilder.substring(0, nlPosition);
-            stringBuilder.delete(0, nlPosition + nlLength);
+            String line = stringBuffer.substring(0, nlPosition);
+            stringBuffer.delete(0, nlPosition + nlLength);
             return line;
         }
         return null;
