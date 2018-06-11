@@ -52,6 +52,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.lang.Thread.sleep;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -219,6 +220,35 @@ public class TestWebSocketConnection {
     }
 
     @Test
+    public void shouldExecuteAndCancelTheExecution() throws Exception {
+
+        String context = this.getClass().getName() + ".shouldExecuteAndCancelTheExecution";
+
+        ObjectWrapper<Boolean> running = new ObjectWrapper<>(false);
+        ObjectWrapper<Boolean> interrupted = new ObjectWrapper<>(false);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            log.info("Received status {}.", statusUpdateEvent.getNewStatus());
+            if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING) ) {
+                running.set(true);
+            }
+            if (statusUpdateEvent.getNewStatus().equals(Status.FAILED) ) {
+                interrupted.set(true);
+            }
+        };
+
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.SILENT, false);
+
+        buildAgentClient.executeCommand(getTestCommand(3, 1000));
+        Wait.forCondition(() -> running.get(), 1, ChronoUnit.SECONDS, "Command did not start in given timeout.");
+        sleep(250);
+        buildAgentClient.execute('C' - 64);
+
+        Wait.forCondition(() -> interrupted.get(), 1, ChronoUnit.SECONDS, "Command did not get interrupted in given timeout.");
+
+        buildAgentClient.close();
+    }
+
+    @Test
     public void clientShouldBeAbleToConnectToRunningProcess() throws Exception {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcess";
 
@@ -231,7 +261,7 @@ public class TestWebSocketConnection {
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(getTestCommand(100, 20));
 
-        Thread.sleep(1000); //wait for async command start
+        sleep(1000); //wait for async command start
         buildAgentClient.close();
 
         StringBuilder response = new StringBuilder();
@@ -465,12 +495,12 @@ public class TestWebSocketConnection {
         return stringBuilder.toString();
     }
 
-    private String getTestCommand(int repeat, int delaySec) {
-        return getTestCommand(repeat, delaySec, "");
+    private String getTestCommand(int repeat, int delayMillis) {
+        return getTestCommand(repeat, delayMillis, "");
     }
 
-    private String getTestCommand(int repeat, int delaySec, String customMessage) {
-        String command = TEST_COMMAND_BASE + " " + repeat + " " + delaySec;
+    private String getTestCommand(int repeat, int delayMillis, String customMessage) {
+        String command = TEST_COMMAND_BASE + " " + repeat + " " + delayMillis;
         if (customMessage != null && !customMessage.equals("")) {
             command = command + " " + customMessage;
         }
