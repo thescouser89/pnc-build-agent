@@ -24,7 +24,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -35,7 +37,7 @@ public class BuildAgentServer {
 
     private final Logger log = LoggerFactory.getLogger(BuildAgentServer.class);
     private final BootstrapUndertow undertowBootstrap;
-    private final IoLoggerChannel ioLoggerChannel;
+    private final ReadOnlyChannel ioLogger;
     private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
 
     private final int port;
@@ -49,10 +51,19 @@ public class BuildAgentServer {
             this.port = port;
         }
 
+        Set<ReadOnlyChannel> sinkChannels = new HashSet<>();
+        if (IoLogLogger.processLog.isInfoEnabled()) {
+            sinkChannels.add(new IoLogLogger());
+        }
+
         if (logPath.isPresent()) {
-            ioLoggerChannel = new IoLoggerChannel(logPath.get());
+            sinkChannels.add(new IoFileLogger(logPath.get()));
+        }
+
+        if (sinkChannels.size() > 0) {
+            ioLogger = new ChannelJoin(sinkChannels);
         } else {
-            ioLoggerChannel = null;
+            ioLogger = null;
         }
 
         undertowBootstrap = new BootstrapUndertow(
@@ -60,7 +71,7 @@ public class BuildAgentServer {
                 this.port,
                 executor,
                 bindPath,
-                Optional.ofNullable(ioLoggerChannel),
+                Optional.ofNullable(ioLogger),
                 completionHandler -> {
                     if (completionHandler) {
                         log.info("Server started on " + this.host + ":" + this.port);
@@ -93,8 +104,12 @@ public class BuildAgentServer {
 
     public void stop() {
         undertowBootstrap.stop();
-        if (ioLoggerChannel != null) {
-            ioLoggerChannel.close();
+        if (ioLogger != null) {
+            try {
+                ioLogger.close();
+            } catch (IOException e) {
+                log.error("Cannot close ioLogger.", e);
+            }
         }
     }
 }

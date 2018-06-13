@@ -26,6 +26,7 @@ import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -52,6 +53,10 @@ public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
             log.trace("Sending message [{}]", line);
             WebSockets.sendText(line, webSocketChannel, new WebSocketCallbackHandler());
         }
+    }
+
+    @Override
+    public void close() throws IOException {
     }
 
     private static class WebSocketCallbackHandler implements WebSocketCallback  {

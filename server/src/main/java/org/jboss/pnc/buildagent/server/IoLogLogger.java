@@ -21,27 +21,32 @@ package org.jboss.pnc.buildagent.server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
+import java.nio.charset.Charset;
+import java.util.function.Consumer;
 
 /**
- * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
+ * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
  */
-public class IoLoggerChannel implements ReadOnlyChannel {
+public class IoLogLogger implements ReadOnlyChannel {
 
-    private static final Logger log = LoggerFactory.getLogger(IoLoggerChannel.class);
+    static final Logger processLog = LoggerFactory.getLogger("org.jboss.pnc._userlog_.build-log");
+    private static final Logger log = LoggerFactory.getLogger(IoLogLogger.class);
+    private Charset charset = Charset.defaultCharset();
+    private Consumer<byte[]> outputLogger;
 
-    final IoFileLogger ioLogger;
+    public IoLogLogger() {
+        outputLogger = (bytes) -> {
+            processLog.info(new String(bytes, charset));
+        };
+    }
 
-    public IoLoggerChannel(Path logPath) {
-        ioLogger = new IoFileLogger(logPath);
+    @Override
+    public void close() {
+        log.info("Closing IoLogLogger.");
     }
 
     @Override
     public void writeOutput(byte[] buffer) {
-        ioLogger.getOutputLogger().accept(buffer);
-    }
-
-    public void close() {
-        ioLogger.close();
+        outputLogger.accept(buffer);
     }
 }

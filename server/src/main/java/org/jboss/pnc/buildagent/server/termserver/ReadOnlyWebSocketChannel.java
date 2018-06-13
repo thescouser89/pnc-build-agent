@@ -22,6 +22,7 @@ import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -38,5 +39,9 @@ public class ReadOnlyWebSocketChannel implements ReadOnlyChannel {
     @Override
     public void writeOutput(byte[] buffer) {
         WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
+    }
+
+    @Override
+    public void close() throws IOException {
     }
 }

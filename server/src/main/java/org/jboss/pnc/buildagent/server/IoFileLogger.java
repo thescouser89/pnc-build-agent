@@ -21,7 +21,6 @@ package org.jboss.pnc.buildagent.server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -31,7 +30,7 @@ import java.util.function.Consumer;
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
  */
-public class IoFileLogger implements Closeable {
+public class IoFileLogger implements ReadOnlyChannel {
 
     Logger log = LoggerFactory.getLogger(IoFileLogger.class);
     private Charset charset = Charset.defaultCharset();
@@ -70,6 +69,7 @@ public class IoFileLogger implements Closeable {
     }
 
 
+    @Override
     public void close() {
         try {
             stream.close();
@@ -78,19 +78,8 @@ public class IoFileLogger implements Closeable {
         }
     }
 
-    public Consumer<String> getInputLogger() {
-        return inputLogger;
-    }
-
-    public Consumer<byte[]> getOutputLogger() {
-        return outputLogger;
-    }
-
-    public void write(String message) {
-        try {
-            stream.write(message.getBytes(charset));
-        } catch (IOException e) {
-            log.error("cannot write message: " + message + " to log.", e);
-        }
+    @Override
+    public void writeOutput(byte[] buffer) {
+        outputLogger.accept(buffer);
     }
 }

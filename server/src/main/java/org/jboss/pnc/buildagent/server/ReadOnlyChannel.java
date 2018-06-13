@@ -18,9 +18,11 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import java.io.Closeable;
+
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public interface ReadOnlyChannel {
+public interface ReadOnlyChannel extends Closeable {
     void writeOutput(byte[] buffer);
 }
