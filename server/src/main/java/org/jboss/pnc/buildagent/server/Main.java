@@ -28,7 +28,10 @@ import org.apache.commons.cli.ParseException;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -43,6 +46,8 @@ public class Main {
         options.addOption("p", true, "Port to bind. When not specified " + DEFAULT_PORT + " is used as default.");
         options.addOption("l", true, "Path to folder where process logs are stored. If undefined logs are not written.");
         options.addOption("c", true, "Bind path. A URL mapping path that is used as a prefix to the path. eg. domain.com/<bind-path>/socket");
+        options.addOption("kp",true, "Path to kafka properties file.");
+        options.addOption("pl",true, "List of primary loggers. eg. -pl FILE,KAFKA");
         options.addOption("h", false, "Print this help message.");
 
         CommandLineParser parser = new DefaultParser();
@@ -64,8 +69,31 @@ public class Main {
         } else {
             logPath = Optional.empty();
         }
+
+        String kafkaPropertiesString = getOption(cmd, "kp", null);
+        Optional<Path> kafkaPropertiesPath;
+        if (kafkaPropertiesString != null) {
+            kafkaPropertiesPath = Optional.of(Paths.get(kafkaPropertiesString));
+        } else {
+            kafkaPropertiesPath = Optional.empty();
+        }
+
+        String primaryLoggersString = getOption(cmd, "pl", "FILE");
+        String[] primaryLoggersStrArr = primaryLoggersString.split(",");
+        List<IoLoggerName> primaryLogersList = Arrays.asList(primaryLoggersStrArr).stream()
+                .map(l -> IoLoggerName.valueOf(l))
+                .collect(Collectors.toList());
+        IoLoggerName[] primaryLoggers = primaryLogersList.toArray(new IoLoggerName[primaryLogersList.size()]);
+
         String bindPath = getOption(cmd, "c", "");
-        new BuildAgentServer(host, port, bindPath, logPath, () -> {});
+        new BuildAgentServer(
+                host,
+                port,
+                bindPath,
+                logPath,
+                kafkaPropertiesPath,
+                primaryLoggers,
+                () -> {});
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {

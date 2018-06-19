@@ -61,7 +61,8 @@ public class TermdServer {
         serverThread = new Thread(() -> {
             Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
             try {
-                new BuildAgentServer(host, port, bindPath, logFolder, onStart);
+                IoLoggerName[] primaryLoggers = {IoLoggerName.FILE};
+                new BuildAgentServer(host, port, bindPath, logFolder, Optional.empty(), primaryLoggers ,onStart);
             } catch (BuildAgentException e) {
                 throw new RuntimeException("Cannot start terminal server.", e);
             }

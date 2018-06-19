@@ -21,11 +21,15 @@ package org.jboss.pnc.buildagent.server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileReader;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -37,13 +41,20 @@ public class BuildAgentServer {
 
     private final Logger log = LoggerFactory.getLogger(BuildAgentServer.class);
     private final BootstrapUndertow undertowBootstrap;
-    private final ReadOnlyChannel ioLogger;
     private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
+    Set<ReadOnlyChannel> sinkChannels = new HashSet<>();
 
     private final int port;
     private final String host;
 
-    public BuildAgentServer(String host, final int port, String bindPath, Optional<Path> logPath, Runnable onStart) throws BuildAgentException {
+    public BuildAgentServer(
+            String host,
+            final int port,
+            String bindPath,
+            Optional<Path> logPath,
+            Optional<Path> kafkaConfig,
+            IoLoggerName[] primaryLoggersArr,
+            Runnable onStart) throws BuildAgentException {
         this.host = host;
         if (port == 0) {
             this.port = findFirstFreePort();
@@ -51,19 +62,30 @@ public class BuildAgentServer {
             this.port = port;
         }
 
-        Set<ReadOnlyChannel> sinkChannels = new HashSet<>();
+        List<IoLoggerName> primaryLoggers = Arrays.asList(primaryLoggersArr);
+
         if (IoLogLogger.processLog.isInfoEnabled()) {
+            log.info("Initializing Logger sink.");
             sinkChannels.add(new IoLogLogger());
         }
 
         if (logPath.isPresent()) {
-            sinkChannels.add(new IoFileLogger(logPath.get()));
+            log.info("Initializing File sink.");
+            sinkChannels.add(new IoFileLogger(logPath.get(), isPrimary(primaryLoggers, IoLoggerName.FILE)));
         }
 
-        if (sinkChannels.size() > 0) {
-            ioLogger = new ChannelJoin(sinkChannels);
-        } else {
-            ioLogger = null;
+        if (kafkaConfig.isPresent()) {
+            log.info("Initializing Kafka sink.");
+            Properties properties = new Properties();
+            try {
+                properties.load(new FileReader(kafkaConfig.get().toFile()));
+            } catch (IOException e) {
+                throw new BuildAgentException("Cannot read kafka properties.", e);
+            }
+            String queueTopic = properties.getProperty("pnc.queue_topic", "pnc-logs");
+            long flushTimeoutMillis = Long.parseLong(properties.getProperty("pnc.flush_timeout_millis", "10000"));
+
+            sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis));
         }
 
         undertowBootstrap = new BootstrapUndertow(
@@ -71,7 +93,7 @@ public class BuildAgentServer {
                 this.port,
                 executor,
                 bindPath,
-                Optional.ofNullable(ioLogger),
+                sinkChannels,
                 completionHandler -> {
                     if (completionHandler) {
                         log.info("Server started on " + this.host + ":" + this.port);
@@ -83,6 +105,15 @@ public class BuildAgentServer {
                     }
                 }
         );
+    }
+
+    private boolean isPrimary(List<IoLoggerName> primaryLoggers, IoLoggerName name) {
+        if (primaryLoggers.contains(name)) {
+            log.info("Logger {} is primary.", name);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     private int findFirstFreePort() {
@@ -104,9 +135,10 @@ public class BuildAgentServer {
 
     public void stop() {
         undertowBootstrap.stop();
-        if (ioLogger != null) {
+
+        for (ReadOnlyChannel sinkChannel : sinkChannels) {
             try {
-                ioLogger.close();
+                sinkChannel.close();
             } catch (IOException e) {
                 log.error("Cannot close ioLogger.", e);
             }

@@ -21,6 +21,7 @@ package org.jboss.pnc.buildagent.server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.function.Consumer;
 
@@ -41,6 +42,11 @@ public class IoLogLogger implements ReadOnlyChannel {
     }
 
     @Override
+    public void flush() throws IOException {
+        throw new IOException(new UnsupportedOperationException("Not implemented! IoLogLogger can not be used as primary."));
+    }
+
+    @Override
     public void close() {
         log.info("Closing IoLogLogger.");
     }
@@ -48,5 +54,10 @@ public class IoLogLogger implements ReadOnlyChannel {
     @Override
     public void writeOutput(byte[] buffer) {
         outputLogger.accept(buffer);
+    }
+
+    @Override
+    public boolean isPrimary() {
+        return false;
     }
 }

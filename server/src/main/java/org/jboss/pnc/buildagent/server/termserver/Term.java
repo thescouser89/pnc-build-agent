@@ -32,6 +32,7 @@ import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.common.Arrays;
+import org.jboss.pnc.buildagent.common.function.ThrowingConsumer;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +42,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
@@ -62,12 +63,12 @@ public class Term {
 
     CompleteHandler completeHandle = new CompleteHandler();
 
-    private final Set<ReadOnlyChannel> readOnlyChannels = new HashSet<>();
+    private final Set<ReadOnlyChannel> readOnlyChannels = new CopyOnWriteArraySet<>();
 
-    public Term(String context, Runnable onDestroy, ScheduledExecutorService executor, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+    public Term(String context, Runnable onDestroy, ScheduledExecutorService executor, Set<ReadOnlyChannel> readOnlyChannels) {
         this.context = context;
         this.onDestroy = onDestroy;
-        appendReadOnlyChannel.ifPresent(ch -> readOnlyChannels.add(ch));
+        this.readOnlyChannels.addAll(readOnlyChannels);
 
         Runnable onStdOutCompleted = () -> {
             completeHandle.setStdoutCompletedAndRun();
@@ -121,6 +122,17 @@ public class Term {
         if (event.getNewStatus().isFinal()) {
             activeCommand = false;
             log.debug("Command [context:{} taskId:{}] execution completed with status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
+            writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
+
+            try {
+                readOnlyChannels.stream()
+                        .filter(ch -> ch.isPrimary())
+                        .forEach(ThrowingConsumer.wrap(ch -> ch.flush()));
+            } catch (Exception e) {
+                log.error("Cannot close primary RO channel.", e);
+                event = new TaskStatusUpdateEvent(event.getTaskId(),event.getOldStatus(), org.jboss.pnc.buildagent.api.Status.FAILED, event.getContext());
+            }
+
             completeHandle.setCompletionEventAndRun(event);
         } else {
             log.debug("Setting command active flag [context:{} taskId:{}] Notifying status {}.", event.getContext(), event.getTaskId(), event.getNewStatus());
@@ -132,7 +144,6 @@ public class Term {
     }
 
     private void complete(TaskStatusUpdateEvent event) {
-        writeCompletedToReadonlyChannel(StatusConverter.toTermdStatus(event.getNewStatus()));
         destroyIfInactiveAndDisconnected();
         notifyStatusUpdateListeners(event);
     }
@@ -145,7 +156,7 @@ public class Term {
     }
 
     private void writeCompletedToReadonlyChannel(Status newStatus) {
-        String completed = "% # Finished with status: " + newStatus + "\n";
+        String completed = "% # Command finished with status: " + newStatus + "\n";
         readOnlyChannels.forEach(ch -> ch.writeOutput(completed.getBytes(StandardCharsets.UTF_8)));
     }
 

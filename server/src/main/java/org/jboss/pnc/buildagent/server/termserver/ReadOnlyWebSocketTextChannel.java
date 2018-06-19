@@ -56,7 +56,18 @@ public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
     }
 
     @Override
+    public boolean isPrimary() {
+        return false;
+    }
+
+    @Override
+    public void flush() throws IOException {
+        webSocketChannel.flush();
+    }
+
+    @Override
     public void close() throws IOException {
+        webSocketChannel.close();
     }
 
     private static class WebSocketCallbackHandler implements WebSocketCallback  {

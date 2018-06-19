@@ -19,10 +19,18 @@
 package org.jboss.pnc.buildagent.server;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public interface ReadOnlyChannel extends Closeable {
     void writeOutput(byte[] buffer);
+
+    /**
+     * @return true if the channel must contain all the output
+     */
+    boolean isPrimary();
+
+    void flush() throws IOException;
 }

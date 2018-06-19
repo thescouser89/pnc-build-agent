@@ -42,6 +42,16 @@ public class ReadOnlyWebSocketChannel implements ReadOnlyChannel {
     }
 
     @Override
+    public boolean isPrimary() {
+        return false;
+    }
+
+    @Override
+    public void flush() throws IOException {
+        webSocketChannel.flush();
+    }
+
+    @Override
     public void close() throws IOException {
     }
 }

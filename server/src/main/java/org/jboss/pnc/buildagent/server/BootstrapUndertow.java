@@ -43,7 +43,7 @@ import java.net.URL;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
@@ -68,21 +68,21 @@ public class BootstrapUndertow {
 
     private final ConcurrentHashMap<String, Term> terms = new ConcurrentHashMap<>();
     private final ScheduledExecutorService executor;
-    private final Optional<ReadOnlyChannel> appendReadOnlyChannel;
+    private final Set<ReadOnlyChannel> appendReadOnlyChannels;
 
     public BootstrapUndertow(
             String host,
             int port,
             ScheduledExecutorService executor,
             String bindPath,
-            Optional<ReadOnlyChannel> ioLoggerChannel,
+            Set<ReadOnlyChannel> ioLoggerChannels,
             Consumer<Boolean> completionHandler) throws BuildAgentException {
         this.host = host;
         this.port = port;
         this.bindPath = bindPath;
 
         this.executor = executor;
-        this.appendReadOnlyChannel = ioLoggerChannel;
+        this.appendReadOnlyChannels = ioLoggerChannels;
 
         bootstrap(completionHandler);
     }
@@ -177,7 +177,7 @@ public class BootstrapUndertow {
         log.debug("Computed invokerContext [{}] from requestPath [{}] and termPath [{}]", invokerContext, requestPath, termPath);
 
         boolean isReadOnly = requestPath.toLowerCase().endsWith("ro");
-        Term term = getTerm(invokerContext, appendReadOnlyChannel);
+        Term term = getTerm(invokerContext, appendReadOnlyChannels);
         term.getWebSocketHandler(responseMode, isReadOnly).handleRequest(exchange);
     }
 
@@ -186,18 +186,18 @@ public class BootstrapUndertow {
         log.info("Connecting status listener ...");
         String requestPath = exchange.getRequestPath();
         String invokerContext = requestPath.replace(processUpdatePath, "");
-        Term term = getTerm(invokerContext, appendReadOnlyChannel);
+        Term term = getTerm(invokerContext, appendReadOnlyChannels);
         term.webSocketStatusUpdateHandler().handleRequest(exchange);
     }
 
-    private Term getTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
-        return terms.computeIfAbsent(invokerContext, ctx -> createNewTerm(invokerContext, appendReadOnlyChannel));
+    private Term getTerm(String invokerContext, Set<ReadOnlyChannel> appendReadOnlyChannels) {
+        return terms.computeIfAbsent(invokerContext, ctx -> createNewTerm(invokerContext, appendReadOnlyChannels));
     }
 
-    private Term createNewTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+    private Term createNewTerm(String invokerContext, Set<ReadOnlyChannel> appendReadOnlyChannels) {
         log.info("Creating new term for context [{}].", invokerContext);
         Runnable onDestroy = () -> terms.remove(invokerContext);
-        Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannel);
+        Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannels);
         return term;
     }
 

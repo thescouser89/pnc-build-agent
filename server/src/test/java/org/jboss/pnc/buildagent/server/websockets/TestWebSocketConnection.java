@@ -473,7 +473,7 @@ public class TestWebSocketConnection {
         }
         log.debug("Log file content: [{}].", fileContent);
 
-        Wait.forCondition(() -> fileContent.contains("# Finished with status: " + Status.COMPLETED.toString()), 3, ChronoUnit.SECONDS, "Missing or invalid completion state of task " + taskId + ".");
+        Wait.forCondition(() -> fileContent.contains("# Command finished with status: " + Status.COMPLETED.toString()), 3, ChronoUnit.SECONDS, "Missing or invalid completion state of task " + taskId + ".");
 
         Assert.assertTrue("Missing executed command in log file of task " + taskId + ".", fileContent.contains(getTestCommand(100, 0)));
         Assert.assertTrue("Missing response message in log file of task " + taskId + ".", fileContent.contains("Hello again"));

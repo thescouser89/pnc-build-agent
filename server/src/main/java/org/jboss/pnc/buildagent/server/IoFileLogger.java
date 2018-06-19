@@ -39,7 +39,10 @@ public class IoFileLogger implements ReadOnlyChannel {
 
     FileOutputStream stream;
 
-    public IoFileLogger(Path logFolder) {
+    private final boolean primary;
+
+    public IoFileLogger(Path logFolder, boolean primary) {
+        this.primary = primary;
         try {
             Path logPath = logFolder.resolve("console.log");
 
@@ -70,16 +73,22 @@ public class IoFileLogger implements ReadOnlyChannel {
 
 
     @Override
-    public void close() {
-        try {
-            stream.close();
-        } catch (IOException e) {
-            log.error("Cannot close log output stream.", e);
-        }
+    public void flush() throws IOException {
+        stream.flush();
+    }
+
+    @Override
+    public void close() throws IOException {
+        stream.close();
     }
 
     @Override
     public void writeOutput(byte[] buffer) {
         outputLogger.accept(buffer);
+    }
+
+    @Override
+    public boolean isPrimary() {
+        return primary;
     }
 }
