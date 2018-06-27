@@ -92,8 +92,7 @@ public class Main {
                 bindPath,
                 logPath,
                 kafkaPropertiesPath,
-                primaryLoggers,
-                () -> {});
+                primaryLoggers);
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {

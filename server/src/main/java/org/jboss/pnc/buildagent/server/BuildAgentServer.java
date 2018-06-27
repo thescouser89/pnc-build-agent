@@ -47,6 +47,7 @@ public class BuildAgentServer {
     private final int port;
     private final String host;
 
+    @Deprecated
     public BuildAgentServer(
             String host,
             final int port,
@@ -55,6 +56,23 @@ public class BuildAgentServer {
             Optional<Path> kafkaConfig,
             IoLoggerName[] primaryLoggersArr,
             Runnable onStart) throws BuildAgentException {
+            this(host, port, bindPath, logPath, kafkaConfig, primaryLoggersArr);
+
+            onStart.run(); //constructor leak
+    }
+
+    /**
+     * Blocks the operation until the server is started.
+     *
+     * @throws BuildAgentException is thrown if server is unable to start.
+     */
+    public BuildAgentServer(
+            String host,
+            final int port,
+            String bindPath,
+            Optional<Path> logPath,
+            Optional<Path> kafkaConfig,
+            IoLoggerName[] primaryLoggersArr) throws BuildAgentException {
         this.host = host;
         if (port == 0) {
             this.port = findFirstFreePort();
@@ -88,23 +106,18 @@ public class BuildAgentServer {
             sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis));
         }
 
-        undertowBootstrap = new BootstrapUndertow(
-                host,
-                this.port,
-                executor,
-                bindPath,
-                sinkChannels,
-                completionHandler -> {
-                    if (completionHandler) {
-                        log.info("Server started on " + this.host + ":" + this.port);
-                        if (onStart != null) {
-                            onStart.run();
-                        }
-                    } else {
-                        log.info("Could not start server");
-                    }
-                }
-        );
+        try {
+            undertowBootstrap = new BootstrapUndertow(
+                    host,
+                    this.port,
+                    executor,
+                    bindPath,
+                    sinkChannels
+            );
+            log.info("Server started on " + this.host + ":" + this.port);
+        } catch (BuildAgentException e) {
+            throw e;
+        }
     }
 
     private boolean isPrimary(List<IoLoggerName> primaryLoggers, IoLoggerName name) {

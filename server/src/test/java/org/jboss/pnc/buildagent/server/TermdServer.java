@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -34,7 +33,7 @@ public class TermdServer {
 
     private static final AtomicInteger port_pool = new AtomicInteger(8090);
 
-    private static Thread serverThread;
+    private static BuildAgentServer buildAgentServer;
 
     private static final Logger log = LoggerFactory.getLogger(TermdServer.class);
 
@@ -52,29 +51,25 @@ public class TermdServer {
      * @param bindPath
      */
     public static void startServer(String host, int port, String bindPath) throws InterruptedException {
-        Semaphore mutex = new Semaphore(1);
-        Runnable onStart = () ->  {
+        Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
+        try {
+            IoLoggerName[] primaryLoggers = {IoLoggerName.FILE};
+            buildAgentServer = new BuildAgentServer(
+                    host,
+                    port,
+                    bindPath,
+                    logFolder,
+                    Optional.empty(),
+                    primaryLoggers);
             log.info("Server started.");
-            mutex.release();
-        };
-        mutex.acquire();
-        serverThread = new Thread(() -> {
-            Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
-            try {
-                IoLoggerName[] primaryLoggers = {IoLoggerName.FILE};
-                new BuildAgentServer(host, port, bindPath, logFolder, Optional.empty(), primaryLoggers ,onStart);
-            } catch (BuildAgentException e) {
-                throw new RuntimeException("Cannot start terminal server.", e);
-            }
-        }, "termd-serverThread-thread");
-        serverThread.start();
-
-        mutex.acquire();
+        } catch (BuildAgentException e) {
+            throw new RuntimeException("Cannot start terminal server.", e);
+        }
     }
 
     public static void stopServer() {
         log.info("Stopping server...");
-        serverThread.interrupt();
+        buildAgentServer.stop();
     }
 
 }

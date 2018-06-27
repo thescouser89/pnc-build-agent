@@ -46,7 +46,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.Consumer;
 import java.util.jar.Manifest;
 
 import static io.undertow.servlet.Servlets.defaultContainer;
@@ -75,8 +74,7 @@ public class BootstrapUndertow {
             int port,
             ScheduledExecutorService executor,
             String bindPath,
-            Set<ReadOnlyChannel> ioLoggerChannels,
-            Consumer<Boolean> completionHandler) throws BuildAgentException {
+            Set<ReadOnlyChannel> ioLoggerChannels) throws BuildAgentException {
         this.host = host;
         this.port = port;
         this.bindPath = bindPath;
@@ -84,10 +82,10 @@ public class BootstrapUndertow {
         this.executor = executor;
         this.appendReadOnlyChannels = ioLoggerChannels;
 
-        bootstrap(completionHandler);
+        bootstrap();
     }
 
-    private void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
+    private void bootstrap() throws BuildAgentException {
         String servletPath = bindPath + Constants.SERVLET_PATH;
         String socketPath = bindPath + Constants.SOCKET_PATH;
         String httpPath = bindPath + Constants.HTTP_PATH;
@@ -126,9 +124,11 @@ public class BootstrapUndertow {
                 .setHandler(pathHandler)
                 .build();
 
-        server.start();
-
-        completionHandler.accept(true);
+        try {
+            server.start();
+        } catch (Exception e) {
+            throw new BuildAgentException("Failed to start Undertow server.", e);
+        }
     }
 
     public void stop() {
