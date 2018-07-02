@@ -67,7 +67,7 @@ public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
 
     @Override
     public void close() throws IOException {
-        webSocketChannel.close();
+        webSocketChannel.sendClose();
     }
 
     private static class WebSocketCallbackHandler implements WebSocketCallback  {

@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.server.termserver.Term;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -147,8 +148,7 @@ public class BuildAgentServer {
     }
 
     public void stop() {
-        undertowBootstrap.stop();
-
+        log.info("Stopping BuildAgentServer.");
         for (ReadOnlyChannel sinkChannel : sinkChannels) {
             try {
                 sinkChannel.close();
@@ -156,5 +156,10 @@ public class BuildAgentServer {
                 log.error("Cannot close ioLogger.", e);
             }
         }
+        for (Term term : undertowBootstrap.getTerms().values()) {
+            term.close();
+        }
+
+        undertowBootstrap.stop();
     }
 }

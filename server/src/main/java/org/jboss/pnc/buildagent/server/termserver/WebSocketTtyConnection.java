@@ -144,6 +144,14 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
 
     @Override
     public void close() {
+        log.info("Closing WebSocketTtyConnection.");
+        if (webSocketChannel != null && webSocketChannel.isOpen()) {
+            try {
+                webSocketChannel.sendClose();
+            } catch (IOException e) {
+                log.debug("Cannot close the channel.", e);
+            }
+        }
         Consumer<Void> closeHandler = getCloseHandler();
         if (closeHandler != null) {
             closeHandler.accept(null);

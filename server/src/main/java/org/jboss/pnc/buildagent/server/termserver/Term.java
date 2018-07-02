@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -57,7 +56,7 @@ public class Term {
 
     final String context;
     private Runnable onDestroy;
-    final Set<Consumer<TaskStatusUpdateEvent>> statusUpdateListeners = new HashSet<>();
+    final Set<TaskStatusUpdateListener> statusUpdateListeners = new CopyOnWriteArraySet<>();
     private WebSocketTtyConnection webSocketTtyConnection;
     private boolean activeCommand;
 
@@ -96,11 +95,11 @@ public class Term {
         }
     }
 
-    public void addStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
+    public void addStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
         statusUpdateListeners.add(statusUpdateListener);
     }
 
-    public void removeStatusUpdateListener(Consumer<TaskStatusUpdateEvent> statusUpdateListener) {
+    public void removeStatusUpdateListener(TaskStatusUpdateListener statusUpdateListener) {
         statusUpdateListeners.remove(statusUpdateListener);
     }
 
@@ -129,7 +128,7 @@ public class Term {
                         .filter(ch -> ch.isPrimary())
                         .forEach(ThrowingConsumer.wrap(ch -> ch.flush()));
             } catch (Exception e) {
-                log.error("Cannot close primary RO channel.", e);
+                log.error("Cannot flush primary RO channel.", e);
                 event = new TaskStatusUpdateEvent(event.getTaskId(),event.getOldStatus(), org.jboss.pnc.buildagent.api.Status.FAILED, event.getContext());
             }
 
@@ -149,9 +148,9 @@ public class Term {
     }
 
     private void notifyStatusUpdateListeners(TaskStatusUpdateEvent event) {
-        for (Consumer<TaskStatusUpdateEvent> statusUpdateListener : statusUpdateListeners) {
+        for (TaskStatusUpdateListener statusUpdateListener : statusUpdateListeners) {
             log.debug("Notifying listener {} in task {} with new status {}", statusUpdateListener, event.getTaskId(), event.getNewStatus());
-            statusUpdateListener.accept(event);
+            statusUpdateListener.getEventConsumer().accept(event);
         }
     }
 
@@ -172,10 +171,12 @@ public class Term {
             if (!readOnly) {
                 if (webSocketTtyConnection.isOpen()) {
                     rejectDueToAlreadyActive(webSocketChannel);
+                    return;
                 }
                 log.info("Adding new master connection from remote address {} to context [{}].", webSocketChannel.getSourceAddress().toString(), context);
                 webSocketTtyConnection.setWebSocketChannel(webSocketChannel, responseMode);
                 webSocketChannel.addCloseTask((task) -> {
+                    log.debug("Master connection closed.");
                     webSocketTtyConnection.removeWebSocketChannel();
                     destroyIfInactiveAndDisconnected();
                 });
@@ -202,7 +203,7 @@ public class Term {
 
     public HttpHandler webSocketStatusUpdateHandler() {
         WebSocketConnectionCallback webSocketConnectionCallback = (exchange, webSocketChannel) -> {
-            Consumer<TaskStatusUpdateEvent> statusUpdateListener = event -> {
+            Consumer<TaskStatusUpdateEvent> eventConsumer = event -> {
                 Map<String, Object> statusUpdate = new HashMap<>();
                 statusUpdate.put("action", "status-update");
                 statusUpdate.put("event", event);
@@ -217,6 +218,7 @@ public class Term {
                     WebSockets.sendClose(CloseMessage.UNEXPECTED_ERROR, errorMessage, webSocketChannel, null);
                 }
             };
+            TaskStatusUpdateListener statusUpdateListener = new TaskStatusUpdateListener(eventConsumer, webSocketChannel);
             log.debug("Registering new status update listener {}.", statusUpdateListener);
             addStatusUpdateListener(statusUpdateListener);
             webSocketChannel.addCloseTask((task) -> removeStatusUpdateListener(statusUpdateListener));
@@ -247,6 +249,11 @@ public class Term {
             log.trace("Writing to chanel {}; stdout: {}", readOnlyChannel, new String(buffer));
             readOnlyChannel.writeOutput(buffer);
         }
+    }
+
+    public void close() {
+        log.info("Closing Term {}.", context);
+        webSocketTtyConnection.close();
     }
 
     private class CompleteHandler {

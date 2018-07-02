@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -54,6 +55,8 @@ public class BuildAgentClient implements Closeable {
 
     private RemoteEndpoint statusUpdatesEndpoint;
     private RemoteEndpoint commandExecutingEndpoint;
+
+    private AtomicBoolean closed = new AtomicBoolean(false);
 
     public BuildAgentClient(String termBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
@@ -125,7 +128,7 @@ public class BuildAgentClient implements Closeable {
     }
 
     private RemoteEndpoint connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String commandContext) {
-        RemoteEndpoint client = initializeDefault();
+        RemoteEndpoint client = initializeDefault("statusListener");
         Consumer<String> responseConsumer = (text) -> {
             log.trace("Decoding response: {}", text);
 
@@ -159,13 +162,14 @@ public class BuildAgentClient implements Closeable {
 
     private RemoteEndpoint connectCommandExecutingClient(String webSocketBaseUrl, Optional<Consumer<String>> responseDataConsumer, String commandContext) throws InterruptedException, TimeoutException {
 
-        RemoteEndpoint client = initializeDefault();
+        RemoteEndpoint client = initializeDefault("commandExecuting");
 
         if (ResponseMode.TEXT.equals(responseMode)) {
             registerTextResponseConsumer(responseDataConsumer, client);
         } else if (ResponseMode.BINARY.equals(responseMode)) {
             registerBinaryResponseConsumer(responseDataConsumer, client);
         } else {
+            log.info("Connecting commandExecutingClient in silent mode.");
             //must be silent mode
         }
 
@@ -218,18 +222,22 @@ public class BuildAgentClient implements Closeable {
         client.onStringMessage(responseConsumer);
     }
 
-    private static RemoteEndpoint initializeDefault() {
+    private RemoteEndpoint initializeDefault(String name) {
 
         Consumer<Session> onOpen = (session) -> {
-            log.info("Client connection opened.");
+            log.info("Client connection opened for {}.", name);
         };
 
         Consumer<CloseReason> onClose = (closeReason) -> {
-            log.info("Client connection closed. " + closeReason);
+            log.info("Client connection closed for {}. {}", name, closeReason);
         };
 
         Consumer<Throwable> onError = (throwable) -> {
-            log.error("An error occurred in websocket client.", throwable);
+            if (!closed.get()) {
+                log.error("An error occurred in websocket client for " + name, throwable);
+            } else {
+                log.trace("An error occurred in websocket client for " + name, throwable);
+            }
         };
         RemoteEndpoint client = new RemoteEndpoint(onOpen, onClose, onError);
 
@@ -238,11 +246,15 @@ public class BuildAgentClient implements Closeable {
 
     @Override
     public void close() throws IOException {
-        try {
-            commandExecutingEndpoint.close();
-            statusUpdatesEndpoint.close();
-        } catch (Exception e) {
-            log.error("Cannot close client.", e);
+        if(closed.compareAndSet(false, true)) {
+            try {
+                commandExecutingEndpoint.close();
+                statusUpdatesEndpoint.close();
+            } catch (Exception e) {
+                log.error("Cannot close client.", e);
+            }
+        } else {
+            log.debug("Already closed.");
         }
     }
 }

@@ -53,5 +53,6 @@ public class ReadOnlyWebSocketChannel implements ReadOnlyChannel {
 
     @Override
     public void close() throws IOException {
+        webSocketChannel.sendClose();
     }
 }

@@ -47,6 +47,7 @@ import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -105,7 +106,7 @@ public class TestWebSocketConnection {
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
             remoteResponseStatuses.add(statusUpdateEvent);
         };
-        List<String> remoteResponses = new ArrayList<>();
+        List<String> remoteResponses = new CopyOnWriteArrayList<>();
 
         Consumer<String> onResponseData = (responseData) -> {
             log.trace("Adding to remote response list [{}].", responseData);

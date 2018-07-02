@@ -70,6 +70,7 @@ public class TermdServer {
     public static void stopServer() {
         log.info("Stopping server...");
         buildAgentServer.stop();
+        log.info("Server stopped.");
     }
 
 }
