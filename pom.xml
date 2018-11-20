@@ -34,7 +34,7 @@
 
   <properties>
     <version.io.termd>1.1.4</version.io.termd>
-    <version.undertow-websockets-jsr>2.0.9.Final</version.undertow-websockets-jsr>
+    <version.undertow>2.0.15.Final</version.undertow>
     <version.junit>4.12</version.junit>
     <version.org.slf4j>1.7.25</version.org.slf4j>
     <version.commons-cli>1.4</version.commons-cli>
@@ -116,8 +116,13 @@
 
       <dependency>
         <groupId>io.undertow</groupId>
+        <artifactId>undertow-core</artifactId>
+        <version>${version.undertow}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.undertow</groupId>
         <artifactId>undertow-websockets-jsr</artifactId>
-        <version>${version.undertow-websockets-jsr}</version>
+        <version>${version.undertow}</version>
       </dependency>
 
       <dependency>

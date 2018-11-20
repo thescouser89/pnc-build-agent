@@ -51,16 +51,32 @@ public class TermdServer {
      * @param bindPath
      */
     public static void startServer(String host, int port, String bindPath) throws InterruptedException {
-        Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
+        startServer(host, port, bindPath, true, true);
+    }
+
+    public static void startServer(String host, int port, String bindPath, boolean useSocket, boolean writeLogFile) throws InterruptedException {
+        Optional<Path> logFolder;
+        IoLoggerName[] primaryLoggers;
+        if (writeLogFile) {
+            logFolder = Optional.of(Paths.get("").toAbsolutePath());
+            primaryLoggers = new IoLoggerName[] { IoLoggerName.FILE};
+        } else {
+            logFolder = Optional.empty();
+            primaryLoggers = new IoLoggerName[] { IoLoggerName.LOG};
+        }
         try {
-            IoLoggerName[] primaryLoggers = {IoLoggerName.FILE};
-            buildAgentServer = new BuildAgentServer(
+            Options options = new Options(
                     host,
                     port,
                     bindPath,
+                    useSocket,
+                    !useSocket
+            );
+            buildAgentServer = new BuildAgentServer(
                     logFolder,
                     Optional.empty(),
-                    primaryLoggers);
+                    primaryLoggers,
+                    options);
             log.info("Server started.");
         } catch (BuildAgentException e) {
             throw new RuntimeException("Cannot start terminal server.", e);
