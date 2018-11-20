@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.common.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +77,8 @@ public class TermdServer {
                     logFolder,
                     Optional.empty(),
                     primaryLoggers,
-                    options);
+                    options,
+                    RandomUtils.randString(6));
             log.info("Server started.");
         } catch (BuildAgentException e) {
             throw new RuntimeException("Cannot start terminal server.", e);

@@ -114,11 +114,8 @@ public class HttpInvoker extends HttpServlet {
             httpClient.invoke(callbackUrl.toURI(), callbackMethod, data, responseFuture);
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize invoke object.", e);
-        } catch (IOException e) {
-            logger.error("Cannot make a invoke request.", e);
         } catch (URISyntaxException e) {
-            //TODO
-            e.printStackTrace();
+            logger.error("Invalid callback url.", e);
         }
     }
 }

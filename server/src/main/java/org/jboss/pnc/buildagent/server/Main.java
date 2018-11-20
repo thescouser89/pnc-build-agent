@@ -25,6 +25,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.jboss.pnc.buildagent.common.RandomUtils;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -48,10 +49,24 @@ public class Main {
         options.addOption("c", true, "Bind path. A URL mapping path that is used as a prefix to the path. eg. domain.com/<bind-path>/socket");
         options.addOption("kp",true, "Path to kafka properties file.");
         options.addOption("pl",true, "List of primary loggers. eg. -pl FILE,KAFKA");
+        options.addOption(null, "logContextId",true, "Log context id.");
+        options.addOption(null, "enableSocketInvoker",true, "Enable Websocket invoker.");
+        options.addOption(null, "enableHttpInvoker",true, "Enable http with callback invoker.");
         options.addOption("h", false, "Print this help message.");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse( options, args);
+
+        String logContextId = getOption(cmd, "logContextId", null);
+        if (logContextId == null) {
+            logContextId = System.getProperty("logContextId");
+        }
+        if (logContextId == null) {
+            logContextId = System.getenv("logContextId");
+        }
+        if (logContextId == null) {
+            logContextId = RandomUtils.randString(12);
+        }
 
         if (cmd.hasOption("h")) {
             HelpFormatter formatter = new HelpFormatter();
@@ -86,13 +101,23 @@ public class Main {
         IoLoggerName[] primaryLoggers = primaryLogersList.toArray(new IoLoggerName[primaryLogersList.size()]);
 
         String bindPath = getOption(cmd, "c", "");
-        new BuildAgentServer(
+        boolean socketInvokerEnabled = Boolean.parseBoolean(getOption(cmd, "enableSocketInvoker", "true"));
+        boolean httpInvokerEnabled = Boolean.parseBoolean(getOption(cmd, "enableHttpInvoker", "false"));
+
+        org.jboss.pnc.buildagent.server.Options buildAgentOptions = new org.jboss.pnc.buildagent.server.Options(
                 host,
                 port,
                 bindPath,
+                socketInvokerEnabled,
+                httpInvokerEnabled
+        );
+
+        new BuildAgentServer(
                 logPath,
                 kafkaPropertiesPath,
-                primaryLoggers);
+                primaryLoggers,
+                buildAgentOptions,
+                logContextId);
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {

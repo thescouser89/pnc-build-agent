@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.common.RandomUtils;
 import org.jboss.pnc.buildagent.server.termserver.Term;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +83,7 @@ public class BuildAgentServer {
                 false
         );
         this.options = options;
-        init(logPath, kafkaConfig, primaryLoggersArr);
+        init(logPath, kafkaConfig, primaryLoggersArr, RandomUtils.randString(8));
     }
 
     /**
@@ -92,9 +93,10 @@ public class BuildAgentServer {
             Optional<Path> logPath,
             Optional<Path> kafkaConfig,
             IoLoggerName[] primaryLoggersArr,
-            Options options) throws BuildAgentException {
+            Options options,
+            String logContextId) throws BuildAgentException {
         this.options = options;
-        init(logPath, kafkaConfig, primaryLoggersArr);
+        init(logPath, kafkaConfig, primaryLoggersArr, logContextId);
     }
     /**
      * Blocks the operation until the server is started.
@@ -104,7 +106,8 @@ public class BuildAgentServer {
     private void init(
             Optional<Path> logPath,
             Optional<Path> kafkaConfig,
-            IoLoggerName[] primaryLoggersArr) throws BuildAgentException {
+            IoLoggerName[] primaryLoggersArr,
+            String logContextId) throws BuildAgentException {
 
         List<IoLoggerName> primaryLoggers = Arrays.asList(primaryLoggersArr);
 
@@ -129,7 +132,7 @@ public class BuildAgentServer {
             String queueTopic = properties.getProperty("pnc.queue_topic", "pnc-logs");
             long flushTimeoutMillis = Long.parseLong(properties.getProperty("pnc.flush_timeout_millis", "10000"));
 
-            sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis));
+            sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis, logContextId));
         }
 
         try {
