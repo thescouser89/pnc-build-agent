@@ -29,7 +29,10 @@ import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import org.jboss.pnc.buildagent.api.Constants;
 import org.jboss.pnc.buildagent.api.ResponseMode;
+import org.jboss.pnc.buildagent.common.http.HttpClient;
+import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.servlet.Download;
+import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
 import org.jboss.pnc.buildagent.server.servlet.Terminal;
 import org.jboss.pnc.buildagent.server.servlet.Upload;
 import org.jboss.pnc.buildagent.server.servlet.Welcome;
@@ -51,6 +54,7 @@ import java.util.jar.Manifest;
 import static io.undertow.servlet.Servlets.defaultContainer;
 import static io.undertow.servlet.Servlets.deployment;
 import static io.undertow.servlet.Servlets.servlet;
+import static org.jboss.pnc.buildagent.api.Constants.HTTP_INVOKER_PATH;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -59,33 +63,28 @@ public class BootstrapUndertow {
 
     private final Logger log = LoggerFactory.getLogger(BootstrapUndertow.class);
 
-    private final String host;
-    private final int port;
-    private final String bindPath;
 
     private Undertow server;
 
     private final ConcurrentHashMap<String, Term> terms = new ConcurrentHashMap<>();
     private final ScheduledExecutorService executor;
-    private final Set<ReadOnlyChannel> appendReadOnlyChannels;
+    private final Set<ReadOnlyChannel> readOnlyChannels;
+    private final Options options;
 
     public BootstrapUndertow(
-            String host,
-            int port,
             ScheduledExecutorService executor,
-            String bindPath,
-            Set<ReadOnlyChannel> ioLoggerChannels) throws BuildAgentException {
-        this.host = host;
-        this.port = port;
-        this.bindPath = bindPath;
+            Set<ReadOnlyChannel> ioLoggerChannels,
+            Options options) throws BuildAgentException {
 
         this.executor = executor;
-        this.appendReadOnlyChannels = ioLoggerChannels;
+        this.readOnlyChannels = ioLoggerChannels;
+        this.options = options;
 
         bootstrap();
     }
 
     private void bootstrap() throws BuildAgentException {
+        String bindPath = options.getBindPath();
         String servletPath = bindPath + Constants.SERVLET_PATH;
         String socketPath = bindPath + Constants.SOCKET_PATH;
         String httpPath = bindPath + Constants.HTTP_PATH;
@@ -104,6 +103,22 @@ public class BootstrapUndertow {
                         servlet("DownloaderServlet", Download.class)
                                 .addMapping("/download/*"));
 
+        if (options.isHttpInvokerEnabled()) {
+
+            HttpClient httpClient;
+            try {
+                httpClient = new HttpClient();
+            } catch (IOException e) {
+                throw new BuildAgentException("Cannot initialize callback client.", e);
+            }
+
+            servletBuilder.addServlet(
+                    servlet("HttpInvoker",
+                            HttpInvoker.class,
+                            new HttpInvokerFactory(readOnlyChannels, httpClient, new SessionRegistry())
+                    ).addMapping(HTTP_INVOKER_PATH + "/*"));
+        }
+
         DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
         manager.deploy();
 
@@ -116,11 +131,13 @@ public class BootstrapUndertow {
 
         PathHandler pathHandler = Handlers.path()
                 .addPrefixPath(servletPath, servletHandler)
-                .addPrefixPath(socketPath, exchange -> handleWebSocketRequests(exchange, socketPath))
                 .addPrefixPath(httpPath, exchange -> handleHttpRequests(exchange, httpPath));
+        if (options.isSocketInvokerEnabled()) {
+            pathHandler.addPrefixPath(socketPath, exchange -> handleWebSocketRequests(exchange, socketPath));
+        }
 
         server = Undertow.builder()
-                .addHttpListener(port, host)
+                .addHttpListener(options.getPort(), options.getHost())
                 .setHandler(pathHandler)
                 .build();
 
@@ -177,7 +194,7 @@ public class BootstrapUndertow {
         log.debug("Computed invokerContext [{}] from requestPath [{}] and termPath [{}]", invokerContext, requestPath, termPath);
 
         boolean isReadOnly = requestPath.toLowerCase().endsWith("ro");
-        Term term = getTerm(invokerContext, appendReadOnlyChannels);
+        Term term = getTerm(invokerContext, readOnlyChannels);
         term.getWebSocketHandler(responseMode, isReadOnly).handleRequest(exchange);
     }
 
@@ -186,7 +203,7 @@ public class BootstrapUndertow {
         log.info("Connecting status listener ...");
         String requestPath = exchange.getRequestPath();
         String invokerContext = requestPath.replace(processUpdatePath, "");
-        Term term = getTerm(invokerContext, appendReadOnlyChannels);
+        Term term = getTerm(invokerContext, readOnlyChannels);
         term.webSocketStatusUpdateHandler().handleRequest(exchange);
     }
 

@@ -18,13 +18,13 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.common.RandomUtils;
 import org.jboss.pnc.buildagent.server.termserver.Term;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileReader;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -41,12 +41,11 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 public class BuildAgentServer {
 
     private final Logger log = LoggerFactory.getLogger(BuildAgentServer.class);
-    private final BootstrapUndertow undertowBootstrap;
+    private BootstrapUndertow undertowBootstrap;
     private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
     Set<ReadOnlyChannel> sinkChannels = new HashSet<>();
 
-    private final int port;
-    private final String host;
+    private final Options options;
 
     @Deprecated
     public BuildAgentServer(
@@ -63,10 +62,10 @@ public class BuildAgentServer {
     }
 
     /**
-     * Blocks the operation until the server is started.
-     *
      * @throws BuildAgentException is thrown if server is unable to start.
+     * @Deprecated use constructor with Options parameter
      */
+    @Deprecated
     public BuildAgentServer(
             String host,
             final int port,
@@ -74,12 +73,41 @@ public class BuildAgentServer {
             Optional<Path> logPath,
             Optional<Path> kafkaConfig,
             IoLoggerName[] primaryLoggersArr) throws BuildAgentException {
-        this.host = host;
-        if (port == 0) {
-            this.port = findFirstFreePort();
-        } else {
-            this.port = port;
-        }
+        int bindPort;
+
+        Options options = new Options(
+                host,
+                port,
+                bindPath,
+                true,
+                false
+        );
+        this.options = options;
+        init(logPath, kafkaConfig, primaryLoggersArr, RandomUtils.randString(8));
+    }
+
+    /**
+     * @throws BuildAgentException is thrown if server is unable to start.
+     */
+    public BuildAgentServer(
+            Optional<Path> logPath,
+            Optional<Path> kafkaConfig,
+            IoLoggerName[] primaryLoggersArr,
+            Options options,
+            String logContextId) throws BuildAgentException {
+        this.options = options;
+        init(logPath, kafkaConfig, primaryLoggersArr, logContextId);
+    }
+    /**
+     * Blocks the operation until the server is started.
+     *
+     * @throws BuildAgentException is thrown if server is unable to start.
+     */
+    private void init(
+            Optional<Path> logPath,
+            Optional<Path> kafkaConfig,
+            IoLoggerName[] primaryLoggersArr,
+            String logContextId) throws BuildAgentException {
 
         List<IoLoggerName> primaryLoggers = Arrays.asList(primaryLoggersArr);
 
@@ -104,18 +132,16 @@ public class BuildAgentServer {
             String queueTopic = properties.getProperty("pnc.queue_topic", "pnc-logs");
             long flushTimeoutMillis = Long.parseLong(properties.getProperty("pnc.flush_timeout_millis", "10000"));
 
-            sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis));
+            sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis, logContextId));
         }
 
         try {
             undertowBootstrap = new BootstrapUndertow(
-                    host,
-                    this.port,
                     executor,
-                    bindPath,
-                    sinkChannels
+                    sinkChannels,
+                    options
             );
-            log.info("Server started on " + this.host + ":" + this.port);
+            log.info("Server started on " + options.getHost() + ":" + options.getPort());
         } catch (BuildAgentException e) {
             throw e;
         }
@@ -130,21 +156,12 @@ public class BuildAgentServer {
         }
     }
 
-    private int findFirstFreePort() {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Could not obtain default port, try specifying it explicitly");
-        }
-    }
-
-
     public int getPort() {
-        return port;
+        return options.getPort();
     }
 
     public String getHost() {
-        return host;
+        return options.getHost();
     }
 
     public void stop() {

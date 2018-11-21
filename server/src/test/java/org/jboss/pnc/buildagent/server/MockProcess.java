@@ -30,7 +30,7 @@ public class MockProcess {
 
     /**
      *
-     * @param args 1: Number of repeats. 2: Delay in ms. 3: Message to print, where "long" is replaced with long string.
+     * @param args 1: Number of repeats. 2: Delay in ms. 3: Message to print, where "long" is replaced with LONG_MESSAGE string.
      * @throws InterruptedException
      */
     public static void main(String[] args) throws InterruptedException {

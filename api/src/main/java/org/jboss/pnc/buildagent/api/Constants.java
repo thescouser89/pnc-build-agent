@@ -22,12 +22,15 @@ package org.jboss.pnc.buildagent.api;
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public class Constants {
-  public static final String HTTP_PATH = "/";
-  public static final String SOCKET_PATH = "/socket";
-  public static final String SERVLET_PATH = "/servlet";
-  public static final String TERM_PATH = "/term";
-  public static final String TERM_PATH_TEXT = "/text";
+    public static final String HTTP_PATH = "/";
+    public static final String SOCKET_PATH = "/socket";
+    public static final String SERVLET_PATH = "/servlet";
+    public static final String TERM_PATH = "/term";
+    public static final String TERM_PATH_TEXT = "/text";
 
-  public static final String TERM_PATH_SILENT = "/silent";
-  public static final String PROCESS_UPDATES_PATH = "/process-status-updates";
+    public static final String TERM_PATH_SILENT = "/silent";
+    public static final String PROCESS_UPDATES_PATH = "/process-status-updates";
+
+    public static final String HTTP_INVOKER_PATH = "/http-invoker";
+    public static final String HTTP_INVOKER_FULL_PATH = SERVLET_PATH + HTTP_INVOKER_PATH;
 }

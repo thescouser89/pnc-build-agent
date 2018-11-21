@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.common.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,16 +52,33 @@ public class TermdServer {
      * @param bindPath
      */
     public static void startServer(String host, int port, String bindPath) throws InterruptedException {
-        Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
+        startServer(host, port, bindPath, true, true);
+    }
+
+    public static void startServer(String host, int port, String bindPath, boolean useSocket, boolean writeLogFile) throws InterruptedException {
+        Optional<Path> logFolder;
+        IoLoggerName[] primaryLoggers;
+        if (writeLogFile) {
+            logFolder = Optional.of(Paths.get("").toAbsolutePath());
+            primaryLoggers = new IoLoggerName[] { IoLoggerName.FILE};
+        } else {
+            logFolder = Optional.empty();
+            primaryLoggers = new IoLoggerName[] { IoLoggerName.LOG};
+        }
         try {
-            IoLoggerName[] primaryLoggers = {IoLoggerName.FILE};
-            buildAgentServer = new BuildAgentServer(
+            Options options = new Options(
                     host,
                     port,
                     bindPath,
+                    useSocket,
+                    !useSocket
+            );
+            buildAgentServer = new BuildAgentServer(
                     logFolder,
                     Optional.empty(),
-                    primaryLoggers);
+                    primaryLoggers,
+                    options,
+                    RandomUtils.randString(6));
             log.info("Server started.");
         } catch (BuildAgentException e) {
             throw new RuntimeException("Cannot start terminal server.", e);
