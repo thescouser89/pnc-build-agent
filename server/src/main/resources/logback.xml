@@ -30,6 +30,7 @@
       <layout class="org.jboss.pnc.buildagent.server.formatter.CustomKeysJsonLayout">
         <timestampFormat>yyyy-MM-dd'T'HH:mm:ss.SSS</timestampFormat>
         <timestampFormatTimezoneId>Etc/UTC</timestampFormatTimezoneId>
+        <loggerAttrName>loggerName</loggerAttrName>
         <jsonFormatter class="ch.qos.logback.contrib.jackson.JacksonJsonFormatter">
           <prettyPrint>false</prettyPrint>
         </jsonFormatter>
