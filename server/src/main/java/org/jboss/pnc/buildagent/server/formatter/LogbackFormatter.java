@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class LogbackFormatter {
+public class LogbackFormatter implements LogFormatter {
 
     private final Logger logger;
     private final ConsoleAppender<ILoggingEvent> appender;
@@ -22,6 +22,7 @@ public class LogbackFormatter {
         appender = (ConsoleAppender<ILoggingEvent>) logger.getAppender("STDOUT-BUILD-LOG");
     }
 
+    @Override
     public String format(String message) {
         ILoggingEvent logEvent = new LoggingEvent(LogbackFormatter.class.getName(), logger, Level.INFO, message, null, new Object[0]);
         byte[] encode = appender.getEncoder().encode(logEvent);

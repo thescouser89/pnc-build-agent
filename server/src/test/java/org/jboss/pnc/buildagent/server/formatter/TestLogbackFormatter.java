@@ -34,8 +34,8 @@ public class TestLogbackFormatter {
         Map<String, Object> map = mapper.readValue(messageJson, Map.class);
 
         Assert.assertEquals(message, map.get("message"));
-        Assert.assertEquals("org.jboss.pnc._userlog_.build-log", map.get("logger"));
-        Assert.assertEquals(ctx, ((Map)map.get("mdc")).get("ctx"));
+        Assert.assertEquals("org.jboss.pnc._userlog_.build-log", map.get("loggerName"));
+        Assert.assertEquals(ctx, ((Map)map.get("mapped")).get("ctx"));
     }
 
 
