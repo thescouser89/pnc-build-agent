@@ -94,7 +94,7 @@ public class HttpInvoker extends HttpServlet {
     }
 
     private void handleOutput(CommandSession commandSession, int[] stdOut) {
-        byte[] buffer = Arrays.toBytes(stdOut);
+        byte[] buffer = Arrays.charIntstoBytes(stdOut);
         commandSession.handleOutput(buffer);
     }
 

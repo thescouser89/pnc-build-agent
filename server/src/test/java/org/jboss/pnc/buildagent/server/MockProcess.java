@@ -18,6 +18,8 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
@@ -62,6 +64,10 @@ public class MockProcess {
             System.out.println(i + " : " + message);
             Thread.sleep(delay);
         }
+        byte[] invalid = new byte[2];
+        invalid[0] = (byte)Integer.parseInt("80", 16);;
+        invalid[1] = (byte)Integer.parseInt("bf", 16);;
+        System.out.println("Writing invalid chars: " + new String(invalid, StandardCharsets.UTF_8));
         System.out.println(FINAL_MESSAGE);
     }
 }

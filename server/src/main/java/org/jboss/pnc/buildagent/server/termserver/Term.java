@@ -245,7 +245,7 @@ public class Term {
 
     private void onStdOut(int[] stdOut) {
         for (ReadOnlyChannel readOnlyChannel : readOnlyChannels) {
-            byte[] buffer = Arrays.toBytes(stdOut);
+            byte[] buffer = Arrays.charIntstoBytes(stdOut);
             log.trace("Writing to chanel {}; stdout: {}", readOnlyChannel, new String(buffer));
             readOnlyChannel.writeOutput(buffer);
         }
