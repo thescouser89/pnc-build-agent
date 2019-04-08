@@ -38,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,6 +62,8 @@ public class Term {
     private boolean activeCommand;
 
     CompleteHandler completeHandle = new CompleteHandler();
+
+    CharsetEncoder charsetEncoder = StandardCharsets.UTF_8.newEncoder();
 
     private final Set<ReadOnlyChannel> readOnlyChannels = new CopyOnWriteArraySet<>();
 
@@ -245,7 +248,7 @@ public class Term {
 
     private void onStdOut(int[] stdOut) {
         for (ReadOnlyChannel readOnlyChannel : readOnlyChannels) {
-            byte[] buffer = Arrays.charIntstoBytes(stdOut);
+            byte[] buffer = Arrays.charIntstoBytes(stdOut, charsetEncoder);
             log.trace("Writing to chanel {}; stdout: {}", readOnlyChannel, new String(buffer));
             readOnlyChannel.writeOutput(buffer);
         }
