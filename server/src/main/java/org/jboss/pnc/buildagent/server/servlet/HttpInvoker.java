@@ -24,7 +24,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.Set;
@@ -45,8 +44,6 @@ public class HttpInvoker extends HttpServlet {
     private final SessionRegistry sessionRegistry;
 
     private final HttpClient httpClient;
-
-    private final CharsetEncoder charsetEncoder = StandardCharsets.UTF_8.newEncoder();
 
     public HttpInvoker(Set<ReadOnlyChannel> readOnlyChannels, SessionRegistry sessionRegistry, HttpClient httpClient) {
         this.readOnlyChannels = readOnlyChannels;
@@ -98,7 +95,7 @@ public class HttpInvoker extends HttpServlet {
     }
 
     private void handleOutput(CommandSession commandSession, int[] stdOut) {
-        byte[] buffer = Arrays.charIntstoBytes(stdOut, charsetEncoder);
+        byte[] buffer = Arrays.charIntstoBytes(stdOut, StandardCharsets.UTF_8);
         commandSession.handleOutput(buffer);
     }
 

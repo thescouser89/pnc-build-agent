@@ -3,7 +3,6 @@ package org.jboss.pnc.buildagent.common;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -21,8 +20,7 @@ public class ArraysTest {
             ints[i] = ((int)c);
         }
 
-        CharsetEncoder charsetEncoder = StandardCharsets.UTF_8.newEncoder();
-        byte[] bytes = Arrays.charIntstoBytes(ints, charsetEncoder);
+        byte[] bytes = Arrays.charIntstoBytes(ints, StandardCharsets.UTF_8);
 
         String reEncoded = new String(bytes, StandardCharsets.UTF_8);
         System.out.println(reEncoded);
