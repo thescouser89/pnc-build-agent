@@ -7,6 +7,7 @@ import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
 
+import java.security.NoSuchAlgorithmException;
 import java.util.Set;
 
 /**
@@ -28,6 +29,10 @@ public class HttpInvokerFactory implements InstanceFactory<HttpInvoker> {
 
     @Override
     public InstanceHandle<HttpInvoker> createInstance() throws InstantiationException {
-        return new ImmediateInstanceHandle<>(new HttpInvoker(readOnlyChannels, sessionRegistry, httpClient));
+        try {
+            return new ImmediateInstanceHandle<>(new HttpInvoker(readOnlyChannels, sessionRegistry, httpClient));
+        } catch (NoSuchAlgorithmException e) {
+            throw new InstantiationException("Cannot create HttpInvoker: " + e.getMessage());
+        }
     }
 }

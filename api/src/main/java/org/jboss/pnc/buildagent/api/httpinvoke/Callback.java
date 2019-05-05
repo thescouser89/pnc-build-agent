@@ -16,21 +16,26 @@ public class Callback {
 
     private String message;
 
-    public Callback(String sessionId, Status failed, String message) {
+    private String logDigest;
+
+    public Callback(String sessionId, Status failed, String message, String logDigest) {
         this.sessionId = sessionId;
         status = failed;
         this.message = message;
+        this.logDigest = logDigest;
     }
 
-    public Callback(String sessionId, Status status) {
+    public Callback(String sessionId, Status status, String logDigest) {
         this.sessionId = sessionId;
         this.status = status;
+        this.logDigest = logDigest;
     }
 
     private Callback(Builder builder) {
         sessionId = builder.sessionId;
         status = builder.status;
         message = builder.message;
+        logDigest = builder.logDigest;
     }
 
     public static Builder newBuilder() {
@@ -54,6 +59,8 @@ public class Callback {
 
         private String message;
 
+        private String logDigest;
+
         private Builder() {
         }
 
@@ -69,6 +76,11 @@ public class Callback {
 
         public Builder message(String message) {
             this.message = message;
+            return this;
+        }
+
+        public Builder logDigest(String logDigest) {
+            this.logDigest = logDigest;
             return this;
         }
 

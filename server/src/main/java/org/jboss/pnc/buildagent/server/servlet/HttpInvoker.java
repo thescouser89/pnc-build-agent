@@ -10,6 +10,7 @@ import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeResponse;
 import org.jboss.pnc.buildagent.common.Arrays;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
+import org.jboss.pnc.buildagent.common.security.Md5;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.server.httpinvoker.CommandSession;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -45,10 +47,14 @@ public class HttpInvoker extends HttpServlet {
 
     private final HttpClient httpClient;
 
-    public HttpInvoker(Set<ReadOnlyChannel> readOnlyChannels, SessionRegistry sessionRegistry, HttpClient httpClient) {
+    private Md5 stdoutDiggest;
+
+    public HttpInvoker(Set<ReadOnlyChannel> readOnlyChannels, SessionRegistry sessionRegistry, HttpClient httpClient)
+            throws NoSuchAlgorithmException {
         this.readOnlyChannels = readOnlyChannels;
         this.sessionRegistry = sessionRegistry;
         this.httpClient = httpClient;
+        this.stdoutDiggest = new Md5();
     }
 
     @Override
@@ -96,16 +102,18 @@ public class HttpInvoker extends HttpServlet {
 
     private void handleOutput(CommandSession commandSession, int[] stdOut) {
         byte[] buffer = Arrays.charIntstoBytes(stdOut, StandardCharsets.UTF_8);
+        stdoutDiggest.add(buffer);
         commandSession.handleOutput(buffer);
     }
 
     private void onComplete(CommandSession commandSession, Status newStatus, URL callbackUrl, String callbackMethod) {
         Callback callbackRequest;
+        String digest = stdoutDiggest.digest();
         try {
             commandSession.close();
-            callbackRequest = new Callback(commandSession.getSessionId(), StatusConverter.fromTermdStatus(newStatus));
+            callbackRequest = new Callback(commandSession.getSessionId(), StatusConverter.fromTermdStatus(newStatus), digest);
         } catch (IOException e) {
-            callbackRequest = new Callback(commandSession.getSessionId(), org.jboss.pnc.buildagent.api.Status.FAILED, "Unable to flush stdout: " + e.getMessage() );
+            callbackRequest = new Callback(commandSession.getSessionId(), org.jboss.pnc.buildagent.api.Status.FAILED, "Unable to flush stdout: " + e.getMessage(), digest);
         }
         //notify completion via callback
 
