@@ -13,4 +13,11 @@ public class Arrays {
         return string.getBytes(charset);
     }
 
+    public static int[] bytesToInts(byte[] bytes) {
+        int[] ints = new int[bytes.length];
+        for (int i = 0; i < bytes.length; i++) {
+            ints[i] = bytes[i];
+        }
+        return ints;
+    }
 }

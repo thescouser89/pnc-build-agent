@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -209,7 +210,7 @@ public class BuildAgentClient implements Closeable {
 
     private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, RemoteEndpoint client) {
         Consumer<byte[]> responseConsumer = (bytes) -> {
-            String responseData = new String(bytes);
+            String responseData = new String(bytes, StandardCharsets.UTF_8);
             responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
         };
         client.onBinaryMessage(responseConsumer);

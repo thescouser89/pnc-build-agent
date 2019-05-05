@@ -8,6 +8,8 @@ import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
@@ -26,6 +28,6 @@ public class LogbackFormatter implements LogFormatter {
     public String format(String message) {
         ILoggingEvent logEvent = new LoggingEvent(LogbackFormatter.class.getName(), logger, Level.INFO, message, null, new Object[0]);
         byte[] encode = appender.getEncoder().encode(logEvent);
-        return new String(encode);
+        return new String(encode, StandardCharsets.UTF_8);
     }
 }

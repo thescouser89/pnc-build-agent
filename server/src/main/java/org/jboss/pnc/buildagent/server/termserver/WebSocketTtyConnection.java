@@ -121,7 +121,7 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
         if (byteBuffer.capacity() == 1) { //handle events
             super.writeToDecoder(byteBuffer.array());
         } else {
-            String msg = new String(byteBuffer.array());
+            String msg = new String(byteBuffer.array(), StandardCharsets.UTF_8);
             super.writeToDecoder(msg);
         }
     }

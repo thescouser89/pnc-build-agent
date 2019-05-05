@@ -27,6 +27,7 @@ import javax.websocket.Endpoint;
 import javax.websocket.EndpointConfig;
 import javax.websocket.MessageHandler;
 import javax.websocket.Session;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 /**
@@ -95,7 +96,7 @@ public class RemoteEndpoint extends Endpoint {
         session.addMessageHandler(new MessageHandler.Whole<byte[]>() {
             @Override
             public void onMessage(byte[] bytes) {
-                log.trace("Client received binary MESSAGE: [{}]. Raw bytes [{}].", new String(bytes), bytes);
+                log.trace("Client received binary MESSAGE: [{}]. Raw bytes [{}].", new String(bytes, StandardCharsets.UTF_8), bytes);
                 if (onBinaryMessageConsumer != null) {
                     onBinaryMessageConsumer.accept(bytes);
                 }

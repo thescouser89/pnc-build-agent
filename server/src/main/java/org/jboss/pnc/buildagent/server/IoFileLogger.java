@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.common.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
@@ -62,7 +64,10 @@ public class IoFileLogger implements ReadOnlyChannel {
                 try {
                     stream.write(bytes);
                 } catch (IOException e) {
-                    log.error("Cannot write output to file.", e);
+                    String bytesAsInts = java.util.Arrays.stream(Arrays.bytesToInts(bytes))
+                            .mapToObj(i -> Integer.toString(i))
+                            .collect(Collectors.joining(", "));
+                    log.error("Cannot write bytes [" + bytesAsInts + "] to file. IsPrimaryLogger: " + isPrimary() + "", e);
                 }
             };
 

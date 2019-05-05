@@ -28,6 +28,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -45,7 +46,7 @@ public class Terminal extends HttpServlet {
             while (inputStream.available() > 0) {
                 byte[] buffer = new byte[512];
                 inputStream.read(buffer);
-                out.write(new String(buffer));
+                out.write(new String(buffer, StandardCharsets.UTF_8));
             }
         }
         out.close();
