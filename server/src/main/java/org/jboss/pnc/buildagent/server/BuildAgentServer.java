@@ -18,7 +18,6 @@
 
 package org.jboss.pnc.buildagent.server;
 
-import org.jboss.pnc.buildagent.common.RandomUtils;
 import org.jboss.pnc.buildagent.server.termserver.Term;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +26,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,47 +46,6 @@ public class BuildAgentServer {
     Set<ReadOnlyChannel> sinkChannels = new HashSet<>();
 
     private final Options options;
-
-    @Deprecated
-    public BuildAgentServer(
-            String host,
-            final int port,
-            String bindPath,
-            Optional<Path> logPath,
-            Optional<Path> kafkaConfig,
-            IoLoggerName[] primaryLoggersArr,
-            Runnable onStart) throws BuildAgentException {
-            this(host, port, bindPath, logPath, kafkaConfig, primaryLoggersArr);
-
-            onStart.run(); //constructor leak
-    }
-
-    /**
-     * @throws BuildAgentException is thrown if server is unable to start.
-     * @Deprecated use constructor with Options parameter
-     */
-    @Deprecated
-    public BuildAgentServer(
-            String host,
-            final int port,
-            String bindPath,
-            Optional<Path> logPath,
-            Optional<Path> kafkaConfig,
-            IoLoggerName[] primaryLoggersArr) throws BuildAgentException {
-        int bindPort;
-
-        Options options = new Options(
-                host,
-                port,
-                bindPath,
-                true,
-                false
-        );
-        this.options = options;
-        Map<String, String> mdcMap = new HashMap<>();
-        mdcMap.put("ctx", RandomUtils.randString(8));
-        init(logPath, kafkaConfig, primaryLoggersArr, mdcMap);
-    }
 
     /**
      * @throws BuildAgentException is thrown if server is unable to start.
@@ -136,7 +93,11 @@ public class BuildAgentServer {
             String queueTopic = properties.getProperty("pnc.queue_topic", "pnc-logs");
             long flushTimeoutMillis = Long.parseLong(properties.getProperty("pnc.flush_timeout_millis", "10000"));
 
-            sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis, logMDC));
+            try {
+                sinkChannels.add(new IoKafkaLogger(properties, queueTopic, isPrimary(primaryLoggers, IoLoggerName.KAFKA), flushTimeoutMillis, logMDC));
+            } catch (InstantiationException e) {
+                throw new BuildAgentException("Cannot initialize Kafka logger.", e);
+            }
         }
 
         try {

@@ -44,19 +44,14 @@ public class TermdServer {
         return port_pool.getAndIncrement();
     }
 
-    /**
-     * Try to start the build agent and block until it is up and running.
-     *
-     * @return
-     * @throws InterruptedException
-     * @param host
-     * @param port
-     * @param bindPath
-     */
+    @Deprecated
     public static void startServer(String host, int port, String bindPath) throws InterruptedException {
         startServer(host, port, bindPath, true, true);
     }
 
+    /**
+     * Try to start the build agent and block until it is up and running.
+     */
     public static void startServer(String host, int port, String bindPath, boolean useSocket, boolean writeLogFile) throws InterruptedException {
         Optional<Path> logFolder;
         IoLoggerName[] primaryLoggers;

@@ -18,22 +18,22 @@
 
 package org.jboss.pnc.buildagent.server;
 
-import ch.qos.logback.core.status.Status;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.jboss.pnc.buildagent.server.formatter.LogbackFormatter;
+import org.jboss.pnc.buildagent.api.logging.LogFormatter;
+import org.jboss.pnc.buildagent.server.logging.formatters.jboss.JBossFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+import java.util.ServiceLoader;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -53,7 +53,6 @@ public class IoKafkaLogger implements ReadOnlyChannel {
     private final String queueTopic;
     private final KafkaProducer kafkaProducer;
 
-    List<Status> loggerErrors = new ArrayList<>();
     private static final Logger log = LoggerFactory.getLogger(IoKafkaLogger.class);
     private Charset charset = Charset.defaultCharset();
 
@@ -65,12 +64,16 @@ public class IoKafkaLogger implements ReadOnlyChannel {
 
     private long flushTimeoutMillis;
 
-    public IoKafkaLogger(Properties properties, String queueTopic, boolean primary, long flushTimeoutMillis, Map<String, String> logMDC) {
+    public IoKafkaLogger(Properties properties, String queueTopic, boolean primary, long flushTimeoutMillis, Map<String, String> logMDC)
+            throws InstantiationException {
         this.queueTopic = queueTopic;
         this.primary = primary;
         this.flushTimeoutMillis = flushTimeoutMillis;
         kafkaProducer = new KafkaProducer<>(properties);
-        LogbackFormatter logbackFormatter = new LogbackFormatter();
+
+        ServiceLoader<LogFormatter> loader = ServiceLoader.load(LogFormatter.class);
+        Iterator<LogFormatter> iterator = loader.iterator();
+        LogFormatter logFormatter = getLogFormatter(iterator);
 
         Consumer<Exception> exceptionHandler = (e) -> {
             log.error("Error writing log.", e);
@@ -78,10 +81,23 @@ public class IoKafkaLogger implements ReadOnlyChannel {
         };
         outputLogger = (bytes) -> {
             MDC.setContextMap(logMDC);
-
-            String messageJson = logbackFormatter.format(new String(bytes, charset));
+            String messageJson = logFormatter.format(new String(bytes, charset));
             send(messageJson, exceptionHandler);
         };
+    }
+
+    private LogFormatter getLogFormatter(Iterator<LogFormatter> iterator) throws InstantiationException {
+        LogFormatter logFormatter = null;
+        if (iterator.hasNext()) {
+            logFormatter = iterator.next();
+        }
+        if (iterator.hasNext()) {
+            log.warn("Multiple formatter found, using: " + logFormatter.getClass());
+        }
+        if (logFormatter == null) {
+            logFormatter = new JBossFormatter();
+        }
+        return logFormatter;
     }
 
     @Override

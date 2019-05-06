@@ -1,4 +1,4 @@
-package org.jboss.pnc.buildagent.server.formatter;
+package org.jboss.pnc.buildagent.logback.formatter;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 

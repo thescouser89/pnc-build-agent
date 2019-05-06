@@ -27,12 +27,13 @@
 
   <appender name="STDOUT-BUILD-LOG" class="ch.qos.logback.core.ConsoleAppender">
     <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
-      <layout class="org.jboss.pnc.buildagent.server.formatter.SequencedLayout">
+      <layout class="org.jboss.pnc.buildagent.logback.formatter.SequencedLayout">
         <timestampFormat>yyyy-MM-dd'T'HH:mm:ss.SSS</timestampFormat>
         <timestampFormatTimezoneId>Etc/UTC</timestampFormatTimezoneId>
         <loggerAttrName>loggerName</loggerAttrName>
+        <mdcAttrName>mapped</mdcAttrName>
         <jsonFormatter class="ch.qos.logback.contrib.jackson.JacksonJsonFormatter">
-          <prettyPrint>false</prettyPrint>
+          <prettyPrint>true</prettyPrint>
         </jsonFormatter>
       </layout>
     </encoder>

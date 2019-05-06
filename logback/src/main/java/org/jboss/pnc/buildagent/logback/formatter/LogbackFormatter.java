@@ -1,4 +1,4 @@
-package org.jboss.pnc.buildagent.server.formatter;
+package org.jboss.pnc.buildagent.logback.formatter;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -6,6 +6,7 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
+import org.jboss.pnc.buildagent.api.logging.LogFormatter;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;

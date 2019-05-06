@@ -26,6 +26,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.jboss.pnc.buildagent.common.RandomUtils;
+import org.jboss.pnc.buildagent.server.logging.Mdc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +76,7 @@ public class Main {
 
         Optional<Map<String, String>> mdcParamMap;
         if (logMDC != null && !logMDC.isEmpty()) {
-             mdcParamMap = parseMdc(logMDC);
+             mdcParamMap = Mdc.parseMdc(logMDC);
         } else {
             mdcParamMap = Optional.empty();
         }
@@ -85,7 +86,7 @@ public class Main {
             mdcMap = mdcParamMap.get();
         } else {
             mdcMap = new HashMap<>();
-            mdcMap.put("ctx", RandomUtils.randString(12));
+            mdcMap.put("processContext", RandomUtils.randString(12));
         }
 
         if (cmd.hasOption("h")) {
@@ -138,20 +139,6 @@ public class Main {
                 primaryLoggers,
                 buildAgentOptions,
                 mdcMap);
-    }
-
-    private static Optional<Map<String, String>> parseMdc(String logMDC) {
-        Map<String, String> mdcMap = new HashMap<>();
-        String[] keyVals = logMDC.split(",");
-        for (String keyVal : keyVals) {
-            String[] split = keyVal.split(":");
-            if (split.length != 2) {
-                logger.warn("Invalid logMdc, expected comma-separated list of key value pairs delimited with colon. eg. k1:v1,k2,v2. Found:{}", logMDC);
-                return Optional.empty();
-            }
-            mdcMap.put(split[0], split[1]);
-        }
-        return Optional.of(mdcMap);
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {

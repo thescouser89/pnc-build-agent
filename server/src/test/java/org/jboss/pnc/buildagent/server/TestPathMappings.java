@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.common.RandomUtils;
 import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -26,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 
@@ -40,7 +43,11 @@ public class TestPathMappings {
 
     @Test
     public void serverShouldListenOnRoot() throws BuildAgentException, InterruptedException, IOException {
-        BuildAgentServer buildAgent = new BuildAgentServer(HOST, 0, "", Optional.empty(), Optional.empty(), new IoLoggerName[0]);
+        Map<String, String> mdcMap = new HashMap<>();
+        mdcMap.put("ctx", RandomUtils.randString(8));
+        Options options = new Options(HOST, 0, "", true, false);
+
+        BuildAgentServer buildAgent = new BuildAgentServer(Optional.empty(), Optional.empty(), new IoLoggerName[0], options, mdcMap);
 
         HttpURLConnection connection200 = connectToUrl(buildAgent.getPort(), "");
         Assert.assertEquals("Unexpected http response code.", 200, connection200.getResponseCode());
@@ -53,8 +60,11 @@ public class TestPathMappings {
 
     @Test
     public void serverShouldListenOnPath() throws InterruptedException, IOException, BuildAgentException {
+        Map<String, String> mdcMap = new HashMap<>();
+        mdcMap.put("ctx", RandomUtils.randString(8));
         String contextPath = "ctx-path";
-        BuildAgentServer buildAgent = new BuildAgentServer(HOST, 0, "/" + contextPath, Optional.empty(), Optional.empty(), new IoLoggerName[0]);
+        Options options = new Options(HOST, 0, "/" + contextPath, true, false);
+        BuildAgentServer buildAgent = new BuildAgentServer(Optional.empty(), Optional.empty(), new IoLoggerName[0], options, mdcMap);
 
         HttpURLConnection connection200 = connectToUrl(buildAgent.getPort(), contextPath);
         Assert.assertEquals("Unexpected http response code.", 200, connection200.getResponseCode());

@@ -52,6 +52,7 @@ public class TestFileUpload extends FileUploadAbstract {
     @Test
     public void uploadFile() throws Exception {
         super.uploadFile(HOST, PORT, "");
+        Thread.sleep(3000);
     }
 
     private void assertFileWasUploaded(Path fileUploadPath, String expectedFileContent) throws FileNotFoundException {

@@ -1,4 +1,4 @@
-package org.jboss.pnc.buildagent.server.formatter;
+package org.jboss.pnc.buildagent.logback.formatter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Assert;
@@ -14,9 +14,8 @@ import java.util.Map;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class TestLogbackFormatter {
-
-    Logger logger = LoggerFactory.getLogger(TestLogbackFormatter.class);
+public class LogbackFormatterTest {
+    Logger logger = LoggerFactory.getLogger(LogbackFormatterTest.class);
 
     @Test
     public void shouldReturnJsonFormatted() throws IOException {
@@ -37,6 +36,4 @@ public class TestLogbackFormatter {
         Assert.assertEquals("org.jboss.pnc._userlog_.build-log", map.get("loggerName"));
         Assert.assertEquals(ctx, ((Map)map.get("mapped")).get("ctx"));
     }
-
-
 }
