@@ -52,7 +52,7 @@ public class TermdServer {
     /**
      * Try to start the build agent and block until it is up and running.
      */
-    public static void startServer(String host, int port, String bindPath, boolean useSocket, boolean writeLogFile) throws InterruptedException {
+    public static void startServer(String host, int port, String bindPath, boolean enableSocketInvoker, boolean writeLogFile) throws InterruptedException {
         Optional<Path> logFolder;
         IoLoggerName[] primaryLoggers;
         if (writeLogFile) {
@@ -67,8 +67,8 @@ public class TermdServer {
                     host,
                     port,
                     bindPath,
-                    useSocket,
-                    !useSocket
+                    enableSocketInvoker,
+                    !enableSocketInvoker
             );
             Map<String, String> mdcMap = new HashMap<>();
             mdcMap.put("ctx", RandomUtils.randString(6));
