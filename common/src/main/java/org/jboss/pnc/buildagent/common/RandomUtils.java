@@ -33,7 +33,7 @@ public class RandomUtils {
      * @param max Maximum value.  Must be greater than min.
      * @return Integer between min and max, inclusive.
      * @see Random#nextInt(int)
-     * @author http://stackoverflow.com/questions/363681/generating-random-integers-in-a-range-with-java
+     * @see "http://stackoverflow.com/questions/363681/generating-random-integers-in-a-range-with-java"
      */
     public static int randInt(int min, int max) {
 
