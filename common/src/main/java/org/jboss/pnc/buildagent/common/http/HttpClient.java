@@ -11,6 +11,7 @@ import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 import io.undertow.util.StringReadChannelListener;
 import io.undertow.util.StringWriteChannelListener;
+import org.jboss.pnc.buildagent.common.concurrent.MDCScheduledThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.OptionMap;
@@ -22,6 +23,9 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
@@ -36,6 +40,8 @@ public class HttpClient implements Closeable {
 
     private static final OptionMap DEFAULT_OPTIONS;
 
+    private ScheduledExecutorService executor = new MDCScheduledThreadPoolExecutor(4);
+
     static {
         final OptionMap.Builder builder = OptionMap.builder()
                 .set(Options.WORKER_IO_THREADS, 8)
@@ -44,6 +50,13 @@ public class HttpClient implements Closeable {
                 .set(Options.WORKER_NAME, "Build Agent Http Client");
         DEFAULT_OPTIONS = builder.getMap();
     }
+
+    private int maxRetries = 10;
+
+    /**
+     * Wait before retry is calculated as attempt * waitBeforeRetry@[millis].
+     */
+    private int waitBeforeRetry = 500;
 
     public HttpClient() throws IOException {
         final Xnio xnio = Xnio.getInstance();
@@ -57,14 +70,56 @@ public class HttpClient implements Closeable {
                 100);
     }
 
-    public HttpClient(XnioWorker xnioWorker, ByteBufferPool buffer) throws IOException {
+    public HttpClient(HttpClientConfiguration configuration) throws IOException {
         final Xnio xnio = Xnio.getInstance();
+        xnioWorker = xnio.createWorker(null, DEFAULT_OPTIONS);
+
+        buffer = new DefaultByteBufferPool(
+                true,
+                1024 * 16,
+                1000,
+                10,
+                100);
+        maxRetries = configuration.getMaxRetries();
+        waitBeforeRetry = configuration.getWaitBeforeRetry();
+    }
+
+    public HttpClient(XnioWorker xnioWorker, ByteBufferPool buffer) throws IOException {
         this.xnioWorker = xnioWorker;
         this.buffer = buffer;
     }
 
+    public HttpClient(XnioWorker xnioWorker, ByteBufferPool buffer, HttpClientConfiguration configuration) throws IOException {
+        this(xnioWorker, buffer);
+        maxRetries = configuration.getMaxRetries();
+        waitBeforeRetry = configuration.getWaitBeforeRetry();
+    }
+
     public void invoke(URI uri, String requestMethod, String data, CompletableFuture<Response> responseFuture) {
-        logger.trace("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
+        logger.debug("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
+        invokeAttempt(uri, requestMethod, data, responseFuture, 0, false);
+    }
+
+    public void invokeWithRetry(URI uri, String requestMethod, String data, CompletableFuture<Response> responseFuture) {
+        logger.debug("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
+        invokeAttempt(uri, requestMethod, data, responseFuture, 0, true);
+    }
+
+    private void invokeAttempt(
+            URI uri,
+            String requestMethod,
+            String data,
+            CompletableFuture<Response> responseFuture,
+            int attempt,
+            boolean withRetry) {
+        if (attempt > 0) {
+            logger.warn(
+                    "Retrying ({}) {} request to the endpoint {}; request data: {}.",
+                    attempt,
+                    requestMethod,
+                    uri.toString(),
+                    data);
+        }
 
         UndertowClient undertowClient = UndertowClient.getInstance();
 
@@ -120,8 +175,11 @@ public class HttpClient implements Closeable {
 
         Response response = new Response();
 
-        undertowClient.connect(clientConnection, uri, xnioWorker, buffer, DEFAULT_OPTIONS);
-        clientConnectionFuture.thenCompose(connection -> {
+        CompletableFuture.completedFuture(null).thenCompose(nul -> {
+                undertowClient.connect(clientConnection, uri, xnioWorker, buffer, DEFAULT_OPTIONS);
+                return clientConnectionFuture;
+            }
+        ).thenCompose(connection -> {
                 ClientRequest request = new ClientRequest();
                 request.setMethod(HttpString.tryFromString(requestMethod));
                 request.setPath(uri.getPath());
@@ -144,16 +202,26 @@ public class HttpClient implements Closeable {
         ).handle((string, throwable) -> {
             if (throwable != null) {
                 logger.error("Error: ", throwable);
-                responseFuture.completeExceptionally(throwable);
+                if (withRetry && attempt < maxRetries) {
+                    executor.schedule(
+                            () -> invokeAttempt(uri, requestMethod, data, responseFuture, attempt+1, true),
+                            waitBeforeRetry * attempt, TimeUnit.MILLISECONDS
+                    );
+                } else {
+                    responseFuture.completeExceptionally(throwable);
+                }
+            } else {
+                response.string = string;
+                responseFuture.complete(response);
             }
-            response.string = string;
-            responseFuture.complete(response);
             return null;
         });
     }
 
     @Override
     public void close() throws IOException {
+        logger.info("Shutting down.");
+        executor.shutdownNow();
         xnioWorker.shutdown();
     }
 
