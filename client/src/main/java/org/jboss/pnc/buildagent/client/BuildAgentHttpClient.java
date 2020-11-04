@@ -97,19 +97,19 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         } catch (URISyntaxException e) {
             throw new BuildAgentClientException("Invalid command execution url.", e);
         }
-        HttpClient.Response response = null; //TODO timeout
+        HttpClient.Response response = null;
         try {
-            response = responseFuture.get(5, TimeUnit.SECONDS);
+            response = responseFuture.get(10, TimeUnit.SECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new BuildAgentClientException("No response form the remote agent.", e);
         }
-        InvokeResponse invokeResponse;
+        logger.debug("Response code: {}, body: {}.", response.getCode(), response.getString());
         try {
-            invokeResponse = objectMapper.readValue(response.getString(), InvokeResponse.class);
+            InvokeResponse invokeResponse = objectMapper.readValue(response.getString(), InvokeResponse.class);
+            sessionId = invokeResponse.getSessionId();
         } catch (IOException e) {
             throw new BuildAgentClientException("Cannot read command invocation response.", e);
         }
-        sessionId = invokeResponse.getSessionId();
     }
 
     /**
