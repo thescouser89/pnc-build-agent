@@ -127,7 +127,7 @@ public class HttpInvoker extends HttpServlet {
         CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
         try {
             String data = objectMapper.writeValueAsString(updateEventBuilder.build());
-            httpClient.invoke(callbackUrl.toURI(), callbackMethod, data, responseFuture);
+            httpClient.invokeWithRetry(callbackUrl.toURI(), callbackMethod, data, responseFuture);
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize invoke object.", e);
         } catch (URISyntaxException e) {

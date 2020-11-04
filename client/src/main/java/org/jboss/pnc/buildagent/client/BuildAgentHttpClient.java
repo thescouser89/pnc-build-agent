@@ -91,7 +91,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
         try {
             String requestJson = objectMapper.writeValueAsString(request);
-            getHttpClient().invoke(invokerUrl.toURI(), "POST", requestJson, responseFuture);
+            getHttpClient().invokeWithRetry(invokerUrl.toURI(), "POST", requestJson, responseFuture);
         } catch (JsonProcessingException e) {
             throw new BuildAgentClientException("Cannot serialize request.", e);
         } catch (URISyntaxException e) {
@@ -123,7 +123,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
         try {
             String requestJson = objectMapper.writeValueAsString(request);
-            getHttpClient().invoke(invokerUrl.toURI(), "PUT", requestJson, responseFuture);
+            getHttpClient().invokeWithRetry(invokerUrl.toURI(), "PUT", requestJson, responseFuture);
         } catch (JsonProcessingException e) {
             throw new BuildAgentClientException("Cannot serialize cancel request.", e);
         } catch (IOException e) {
