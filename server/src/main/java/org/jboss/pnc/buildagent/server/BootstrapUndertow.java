@@ -29,6 +29,7 @@ import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import org.jboss.pnc.buildagent.api.Constants;
 import org.jboss.pnc.buildagent.api.ResponseMode;
+import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.servlet.Download;
@@ -68,7 +69,7 @@ public class BootstrapUndertow {
     private final ScheduledExecutorService executor;
     private final Set<ReadOnlyChannel> readOnlyChannels;
     private final Options options;
-    HttpClient httpClient;
+    private HttpClient httpClient;
 
     public BootstrapUndertow(
             ScheduledExecutorService executor,
@@ -110,10 +111,13 @@ public class BootstrapUndertow {
                 throw new BuildAgentException("Cannot initialize callback client.", e);
             }
 
+            RetryConfig retryConfig = new RetryConfig(
+                    options.getCallbackMaxRetries(),
+                    options.getCallbackWaitBeforeRetry());
             servletBuilder.addServlet(
                     servlet("HttpInvoker",
                             HttpInvoker.class,
-                            new HttpInvokerFactory(readOnlyChannels, httpClient, new SessionRegistry())
+                            new HttpInvokerFactory(readOnlyChannels, httpClient, new SessionRegistry(), retryConfig)
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
         }
 

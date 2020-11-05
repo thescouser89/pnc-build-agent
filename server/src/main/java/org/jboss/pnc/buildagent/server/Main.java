@@ -61,6 +61,8 @@ public class Main {
         options.addOption(null, "logMDC",true, "Logging Mapped Diagnostic Context.");
         options.addOption(null, "enableSocketInvoker",true, "Enable Websocket invoker.");
         options.addOption(null, "enableHttpInvoker",true, "Enable http with callback invoker.");
+        options.addOption(null, "callbackMaxRetries",true, "How many times to retry failed completion callback.");
+        options.addOption(null, "callbackWaitBeforeRetry",true, "How long to wait before completion callback retry (calculated as: attempt x duration-in-millis).");
         options.addOption("h", false, "Print this help message.");
 
         CommandLineParser parser = new DefaultParser();
@@ -124,14 +126,17 @@ public class Main {
         String bindPath = getOption(cmd, "c", "");
         boolean socketInvokerEnabled = Boolean.parseBoolean(getOption(cmd, "enableSocketInvoker", "true"));
         boolean httpInvokerEnabled = Boolean.parseBoolean(getOption(cmd, "enableHttpInvoker", "false"));
+        int callbackMaxRetries = Integer.parseInt(getOption(cmd, "callbackMaxRetries", "10"));
+        long callbackWaitBeforeRetry = Long.parseLong(getOption(cmd, "callbackWaitBeforeRetry", "500"));
 
         org.jboss.pnc.buildagent.server.Options buildAgentOptions = new org.jboss.pnc.buildagent.server.Options(
                 host,
                 port,
                 bindPath,
                 socketInvokerEnabled,
-                httpInvokerEnabled
-        );
+                httpInvokerEnabled,
+                callbackMaxRetries,
+                callbackWaitBeforeRetry);
 
         new BuildAgentServer(
                 logPath,

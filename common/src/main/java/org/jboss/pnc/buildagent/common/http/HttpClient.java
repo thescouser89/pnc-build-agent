@@ -22,6 +22,8 @@ import org.xnio.XnioWorker;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -51,13 +53,6 @@ public class HttpClient implements Closeable {
         DEFAULT_OPTIONS = builder.getMap();
     }
 
-    private int maxRetries = 10;
-
-    /**
-     * Wait before retry is calculated as attempt * waitBeforeRetry@[millis].
-     */
-    private int waitBeforeRetry = 500;
-
     public HttpClient() throws IOException {
         final Xnio xnio = Xnio.getInstance();
         xnioWorker = xnio.createWorker(null, DEFAULT_OPTIONS);
@@ -70,48 +65,49 @@ public class HttpClient implements Closeable {
                 100);
     }
 
-    public HttpClient(HttpClientConfiguration configuration) throws IOException {
-        final Xnio xnio = Xnio.getInstance();
-        xnioWorker = xnio.createWorker(null, DEFAULT_OPTIONS);
-
-        buffer = new DefaultByteBufferPool(
-                true,
-                1024 * 16,
-                1000,
-                10,
-                100);
-        maxRetries = configuration.getMaxRetries();
-        waitBeforeRetry = configuration.getWaitBeforeRetry();
-    }
-
     public HttpClient(XnioWorker xnioWorker, ByteBufferPool buffer) throws IOException {
         this.xnioWorker = xnioWorker;
         this.buffer = buffer;
     }
 
-    public HttpClient(XnioWorker xnioWorker, ByteBufferPool buffer, HttpClientConfiguration configuration) throws IOException {
-        this(xnioWorker, buffer);
-        maxRetries = configuration.getMaxRetries();
-        waitBeforeRetry = configuration.getWaitBeforeRetry();
-    }
-
     public void invoke(URI uri, String requestMethod, String data, CompletableFuture<Response> responseFuture) {
         logger.debug("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
-        invokeAttempt(uri, requestMethod, data, responseFuture, 0, false);
+        invokeAttempt(uri, requestMethod, Collections.emptyMap(), data, responseFuture, 0, 0, 0L);
     }
 
-    public void invokeWithRetry(URI uri, String requestMethod, String data, CompletableFuture<Response> responseFuture) {
-        logger.debug("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
-        invokeAttempt(uri, requestMethod, data, responseFuture, 0, true);
+    public void invoke(
+            URI uri,
+            String requestMethod,
+            Map<String, String> requestHeaders,
+            String data,
+            CompletableFuture<Response> responseFuture,
+            int maxRetries,
+            long waitBeforeRetry) {
+        logger.debug("Making request {} {}; Headers: {} request data: {}.",
+                requestMethod, uri.toString(), requestHeaders, data);
+        invokeAttempt(uri, requestMethod, requestHeaders, data, responseFuture, 0, maxRetries, waitBeforeRetry);
     }
 
+    /**
+     *
+     * @param uri
+     * @param requestMethod
+     * @param requestHeaders
+     * @param data
+     * @param responseFuture
+     * @param attempt
+     * @param maxRetries
+     * @param waitBeforeRetry Wait before retry is calculated as attempt * waitBeforeRetry[millis].
+     */
     private void invokeAttempt(
             URI uri,
             String requestMethod,
+            Map<String, String> requestHeaders,
             String data,
             CompletableFuture<Response> responseFuture,
             int attempt,
-            boolean withRetry) {
+            int maxRetries,
+            long waitBeforeRetry) {
         if (attempt > 0) {
             logger.warn(
                     "Retrying ({}) {} request to the endpoint {}; request data: {}.",
@@ -185,6 +181,7 @@ public class HttpClient implements Closeable {
                 request.setPath(uri.getPath());
                 request.getRequestHeaders().put(Headers.HOST, "localhost");
                 request.getRequestHeaders().put(Headers.TRANSFER_ENCODING, "chunked");
+                requestHeaders.forEach((k,v) -> request.getRequestHeaders().put(new HttpString(k), v));
 
                 connection.sendRequest(request, onRequestStart);
                 return onRequestStartFuture;
@@ -202,9 +199,17 @@ public class HttpClient implements Closeable {
         ).handle((string, throwable) -> {
             if (throwable != null) {
                 logger.error("Error: ", throwable);
-                if (withRetry && attempt < maxRetries) {
+                if (maxRetries > 0 && attempt < maxRetries) {
                     executor.schedule(
-                            () -> invokeAttempt(uri, requestMethod, data, responseFuture, attempt+1, true),
+                            () -> invokeAttempt(
+                                    uri,
+                                    requestMethod,
+                                    requestHeaders,
+                                    data,
+                                    responseFuture,
+                                    attempt + 1,
+                                    maxRetries,
+                                    waitBeforeRetry),
                             waitBeforeRetry * attempt, TimeUnit.MILLISECONDS
                     );
                 } else {
