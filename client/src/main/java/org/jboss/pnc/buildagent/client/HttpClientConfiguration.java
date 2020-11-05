@@ -1,19 +1,21 @@
 package org.jboss.pnc.buildagent.client;
 
-import java.net.URL;
+import org.jboss.pnc.buildagent.api.httpinvoke.Request;
+import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
  */
 public class HttpClientConfiguration extends ClientConfigurationBase {
-    private String callbackMethod;
-    private URL callbackUrl;
+
+    private Request callback;
+    private RetryConfig retryConfig;
 
     private HttpClientConfiguration(Builder builder) {
         termBaseUrl = builder.termBaseUrl;
-        callbackMethod = builder.callbackMethod;
-        callbackUrl = builder.callbackUrl;
         livenessResponseTimeout = builder.livenessResponseTimeout;
+        callback = builder.callback;
+        retryConfig = builder.retryConfig;
     }
 
     public static Builder newBuilder() {
@@ -24,24 +26,24 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
         Builder builder = new Builder();
         builder.termBaseUrl = copy.getTermBaseUrl();
         builder.livenessResponseTimeout = copy.getLivenessResponseTimeout();
-        builder.callbackMethod = copy.getCallbackMethod();
-        builder.callbackUrl = copy.getCallbackUrl();
+        builder.callback = copy.getCallback();
+        builder.retryConfig = copy.getRetryConfig();
         return builder;
     }
 
-    public String getCallbackMethod() {
-        return callbackMethod;
+    public Request getCallback() {
+        return callback;
     }
 
-    public URL getCallbackUrl() {
-        return callbackUrl;
+    public RetryConfig getRetryConfig() {
+        return retryConfig;
     }
 
     public static final class Builder {
         private String termBaseUrl;
         private Long livenessResponseTimeout = 30000L;
-        private String callbackMethod;
-        private URL callbackUrl;
+        private Request callback;
+        private RetryConfig retryConfig;
 
         private Builder() {
         }
@@ -56,13 +58,13 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
             return this;
         }
 
-        public Builder callbackMethod(String callbackMethod) {
-            this.callbackMethod = callbackMethod;
+        public Builder callback(Request callback) {
+            this.callback = callback;
             return this;
         }
 
-        public Builder callbackUrl(URL callbackUrl) {
-            this.callbackUrl = callbackUrl;
+        public Builder retryConfig(RetryConfig retryConfig) {
+            this.retryConfig = retryConfig;
             return this;
         }
 

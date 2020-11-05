@@ -14,12 +14,23 @@ public class Options {
 
     private final boolean socketInvokerEnabled;
     private final boolean httpInvokerEnabled;
+    private final int callbackMaxRetries;
+    private final long callbackWaitBeforeRetry;
 
-    public Options(String host, int bindPort, String bindPath, boolean socketInvokerEnabled, boolean httpInvokerEnabled) {
+    public Options(
+            String host,
+            int bindPort,
+            String bindPath,
+            boolean socketInvokerEnabled,
+            boolean httpInvokerEnabled,
+            int callbackMaxRetries,
+            long callbackWaitBeforeRetry) {
         this.host = host;
         this.bindPath = bindPath;
         this.socketInvokerEnabled = socketInvokerEnabled;
         this.httpInvokerEnabled = httpInvokerEnabled;
+        this.callbackMaxRetries = callbackMaxRetries;
+        this.callbackWaitBeforeRetry = callbackWaitBeforeRetry;
 
         if (bindPort == 0) {
             port = findFirstFreePort();
@@ -55,4 +66,13 @@ public class Options {
             throw new IllegalArgumentException("Could not obtain default port, try specifying it explicitly");
         }
     }
+
+    public int getCallbackMaxRetries() {
+        return callbackMaxRetries;
+    }
+
+    public long getCallbackWaitBeforeRetry() {
+        return callbackWaitBeforeRetry;
+    }
+
 }

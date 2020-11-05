@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.api.httpinvoke.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.Cancel;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeResponse;
+import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.Arrays;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.common.security.Md5;
@@ -24,7 +26,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
@@ -47,14 +48,21 @@ public class HttpInvoker extends HttpServlet {
 
     private final HttpClient httpClient;
 
+    private final RetryConfig retryConfig;
+
     private final Md5 stdoutChecksum;
 
 
-    public HttpInvoker(Set<ReadOnlyChannel> readOnlyChannels, SessionRegistry sessionRegistry, HttpClient httpClient)
+    public HttpInvoker(
+            Set<ReadOnlyChannel> readOnlyChannels,
+            SessionRegistry sessionRegistry,
+            HttpClient httpClient,
+            RetryConfig retryConfig)
             throws NoSuchAlgorithmException {
         this.readOnlyChannels = readOnlyChannels;
         this.sessionRegistry = sessionRegistry;
         this.httpClient = httpClient;
+        this.retryConfig = retryConfig;
         this.stdoutChecksum = new Md5();
     }
 
@@ -75,12 +83,10 @@ public class HttpInvoker extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         String requestString = request.getReader().lines().collect(Collectors.joining());
-        logger.debug("Received request body; {}.", requestString);
+        logger.info("Received request body; {}.", requestString);
         InvokeRequest invokeRequest = objectMapper.readValue(requestString, InvokeRequest.class);
 
         String command = invokeRequest.getCommand();
-        URL callbackUrl = invokeRequest.getCallbackUrl();
-        String callbackMethod = invokeRequest.getCallbackMethod();
 
         CommandSession commandSession = new CommandSession(readOnlyChannels);
         String sessionId = commandSession.getSessionId();
@@ -88,7 +94,7 @@ public class HttpInvoker extends HttpServlet {
         PtyMaster ptyMaster = new PtyMaster(command, stdOut -> handleOutput(commandSession, stdOut), (nul) -> {});
         ptyMaster.setChangeHandler((oldStatus, newStatus) -> {
             if (newStatus.isFinal()) {
-                onComplete(commandSession, newStatus, callbackUrl, callbackMethod);
+                onComplete(commandSession, newStatus, invokeRequest.getRequest());
             }
         });
         commandSession.setPtyMaster(ptyMaster);
@@ -107,7 +113,7 @@ public class HttpInvoker extends HttpServlet {
         commandSession.handleOutput(buffer);
     }
 
-    private void onComplete(CommandSession commandSession, Status newStatus, URL callbackUrl, String callbackMethod) {
+    private void onComplete(CommandSession commandSession, Status newStatus, Request request) {
         TaskStatusUpdateEvent.Builder updateEventBuilder = TaskStatusUpdateEvent.newBuilder();
         try {
             String digest = stdoutChecksum.digest();
@@ -122,12 +128,19 @@ public class HttpInvoker extends HttpServlet {
                     .newStatus(org.jboss.pnc.buildagent.api.Status.FAILED)
                     .message("Unable to flush stdout: " + e.getMessage());
         }
-        //notify completion via callback
 
+        //notify completion via callback
         CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
         try {
             String data = objectMapper.writeValueAsString(updateEventBuilder.build());
-            httpClient.invokeWithRetry(callbackUrl.toURI(), callbackMethod, data, responseFuture);
+            httpClient.invoke(
+                    request.getUrl().toURI(),
+                    request.getMethod(),
+                    request.getHeaders(),
+                    data,
+                    responseFuture,
+                    retryConfig.getMaxRetries(),
+                    retryConfig.getWaitBeforeRetry());
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize invoke object.", e);
         } catch (URISyntaxException e) {

@@ -3,9 +3,11 @@ package org.jboss.pnc.buildagent.client;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.pnc.buildagent.api.Constants;
+import org.jboss.pnc.buildagent.api.httpinvoke.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.Cancel;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeResponse;
+import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.StringUtils;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.slf4j.Logger;
@@ -15,6 +17,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -29,9 +32,9 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
     private final URL invokerUrl;
 
-    private final URL callbackUrl;
+    private final Request callback;
 
-    private final String callbackMethod;
+    private final RetryConfig retryConfig;
 
     private String sessionId;
 
@@ -42,8 +45,12 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     public BuildAgentHttpClient(String termBaseUrl, URL callbackUrl, String callbackMethod)
             throws BuildAgentClientException {
         super(termBaseUrl, 30000);
-        this.callbackUrl = callbackUrl;
-        this.callbackMethod = callbackMethod;
+        this.callback = new Request(
+                callbackMethod,
+                callbackUrl,
+                Collections.emptyMap()
+        );
+        this.retryConfig = new RetryConfig(10, 500);
         try {
             invokerUrl = new URL(termBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (MalformedURLException e) {
@@ -54,8 +61,8 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     public BuildAgentHttpClient(HttpClientConfiguration configuration)
             throws BuildAgentClientException {
         super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout());
-        this.callbackUrl = configuration.getCallbackUrl();
-        this.callbackMethod = configuration.getCallbackMethod();
+        this.callback = configuration.getCallback();
+        this.retryConfig = configuration.getRetryConfig();
         try {
             invokerUrl = new URL(configuration.getTermBaseUrl() + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (MalformedURLException e) {
@@ -70,8 +77,8 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     public BuildAgentHttpClient(HttpClient httpClient, HttpClientConfiguration configuration)
             throws BuildAgentClientException {
         super(httpClient, configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout());
-        this.callbackUrl = configuration.getCallbackUrl();
-        this.callbackMethod = configuration.getCallbackMethod();
+        this.callback = configuration.getCallback();
+        this.retryConfig = configuration.getRetryConfig();
         try {
             invokerUrl = new URL(StringUtils.stripEndingSlash(configuration.getTermBaseUrl()) + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (MalformedURLException e) {
@@ -88,11 +95,19 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
             throw new BuildAgentClientException("Http client supports only String commands.");
         }
 
-        InvokeRequest request = new InvokeRequest(cmd, callbackUrl, callbackMethod);
+        InvokeRequest request = new InvokeRequest(cmd, this.callback);
         CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
         try {
             String requestJson = objectMapper.writeValueAsString(request);
-            getHttpClient().invokeWithRetry(invokerUrl.toURI(), "POST", requestJson, responseFuture);
+            getHttpClient().invoke(
+                    invokerUrl.toURI(),
+                    "POST",
+                    Collections.emptyMap(),
+                    requestJson,
+                    responseFuture,
+                    retryConfig.getMaxRetries(),
+                    retryConfig.getWaitBeforeRetry()
+                );
         } catch (JsonProcessingException e) {
             throw new BuildAgentClientException("Cannot serialize request.", e);
         } catch (URISyntaxException e) {
@@ -124,7 +139,14 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
         try {
             String requestJson = objectMapper.writeValueAsString(request);
-            getHttpClient().invokeWithRetry(invokerUrl.toURI(), "PUT", requestJson, responseFuture);
+            getHttpClient().invoke(
+                    invokerUrl.toURI(),
+                    "PUT",
+                    Collections.emptyMap(),
+                    requestJson,
+                    responseFuture,
+                    retryConfig.getMaxRetries(),
+                    retryConfig.getWaitBeforeRetry());
         } catch (JsonProcessingException e) {
             throw new BuildAgentClientException("Cannot serialize cancel request.", e);
         } catch (IOException e) {

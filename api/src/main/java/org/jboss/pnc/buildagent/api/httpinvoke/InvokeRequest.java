@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 import java.net.URL;
+import java.util.Collections;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -13,20 +14,25 @@ public class InvokeRequest {
 
     private final String command;
 
-    private final URL callbackUrl;
+    private final Request request;
 
-    private final String callbackMethod;
-
+    /**
+     * @deprecated use {@link InvokeRequest(String, Request )}
+     */
+    @Deprecated
     public InvokeRequest(String command, URL callbackUrl, String callbackMethod) {
         this.command = command;
-        this.callbackUrl = callbackUrl;
-        this.callbackMethod = callbackMethod;
+        this.request = new Request(callbackMethod, callbackUrl, Collections.emptyMap());
+    }
+
+    public InvokeRequest(String command, Request request) {
+        this.command = command;
+        this.request = request;
     }
 
     private InvokeRequest(Builder builder) {
         command = builder.command;
-        callbackUrl = builder.callbackUrl;
-        callbackMethod = builder.callbackMethod;
+        request = builder.request;
     }
 
     public static Builder builder() {
@@ -37,12 +43,8 @@ public class InvokeRequest {
         return command;
     }
 
-    public URL getCallbackUrl() {
-        return callbackUrl;
-    }
-
-    public String getCallbackMethod() {
-        return callbackMethod;
+    public Request getRequest() {
+        return request;
     }
 
     @JsonPOJOBuilder(withPrefix = "")
@@ -50,9 +52,7 @@ public class InvokeRequest {
 
         private String command;
 
-        private URL callbackUrl;
-
-        private String callbackMethod;
+        private Request request;
 
         private Builder() {
         }
@@ -62,13 +62,8 @@ public class InvokeRequest {
             return this;
         }
 
-        public Builder callbackUrl(URL callbackUrl) {
-            this.callbackUrl = callbackUrl;
-            return this;
-        }
-
-        public Builder callbackMethod(String callbackMethod) {
-            this.callbackMethod = callbackMethod;
+        public Builder request(Request request) {
+            this.request = request;
             return this;
         }
 
