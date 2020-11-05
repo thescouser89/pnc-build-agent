@@ -6,6 +6,7 @@ import org.jboss.pnc.buildagent.api.Constants;
 import org.jboss.pnc.buildagent.api.httpinvoke.Cancel;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeResponse;
+import org.jboss.pnc.buildagent.common.StringUtils;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,7 +73,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         this.callbackUrl = configuration.getCallbackUrl();
         this.callbackMethod = configuration.getCallbackMethod();
         try {
-            invokerUrl = new URL(configuration.getTermBaseUrl() + Constants.HTTP_INVOKER_FULL_PATH);
+            invokerUrl = new URL(StringUtils.stripEndingSlash(configuration.getTermBaseUrl()) + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (MalformedURLException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
