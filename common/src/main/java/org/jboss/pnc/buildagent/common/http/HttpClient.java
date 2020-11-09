@@ -83,7 +83,7 @@ public class HttpClient implements Closeable {
             CompletableFuture<Response> responseFuture,
             int maxRetries,
             long waitBeforeRetry) {
-        logger.debug("Making request {} {}; Headers: {} request data: {}.",
+        logger.info("Making request {} {}; Headers: {} request data: {}.",
                 requestMethod, uri.toString(), requestHeaders, data);
         invokeAttempt(uri, requestMethod, requestHeaders, data, responseFuture, 0, maxRetries, waitBeforeRetry);
     }
@@ -179,7 +179,7 @@ public class HttpClient implements Closeable {
                 ClientRequest request = new ClientRequest();
                 request.setMethod(HttpString.tryFromString(requestMethod));
                 request.setPath(uri.getPath());
-                request.getRequestHeaders().put(Headers.HOST, "localhost");
+                request.getRequestHeaders().put(Headers.HOST, uri.getHost());
                 request.getRequestHeaders().put(Headers.TRANSFER_ENCODING, "chunked");
                 requestHeaders.forEach((k,v) -> request.getRequestHeaders().put(new HttpString(k), v));
 
@@ -193,7 +193,12 @@ public class HttpClient implements Closeable {
             }
         ).thenCompose(exchange -> {
                 response.code = exchange.getResponse().getResponseCode();
-                stringReadChannelListener.apply(buffer).setup(exchange.getResponseChannel());
+                if (response.getCode() == 503) { //retry if 503 Service Unavailable
+                    onResponseCompletedFuture.completeExceptionally(
+                            new RuntimeException("Received response code: " + response.getCode()));
+                } else {
+                    stringReadChannelListener.apply(buffer).setup(exchange.getResponseChannel());
+                }
                 return onResponseCompletedFuture;
             }
         ).handle((string, throwable) -> {
@@ -213,10 +218,12 @@ public class HttpClient implements Closeable {
                             waitBeforeRetry * attempt, TimeUnit.MILLISECONDS
                     );
                 } else {
+                    logger.info("Invocation completed exceptionally. Response code: " + response.getCode());
                     responseFuture.completeExceptionally(throwable);
                 }
             } else {
                 response.string = string;
+                logger.info("Invocation completed. Response code: " + response.getCode());
                 responseFuture.complete(response);
             }
             return null;
