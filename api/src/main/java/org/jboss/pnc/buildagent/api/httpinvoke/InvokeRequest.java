@@ -14,6 +14,9 @@ public class InvokeRequest {
 
     private final String command;
 
+    /**
+     * Callback request
+     */
     private final Request request;
 
     /**

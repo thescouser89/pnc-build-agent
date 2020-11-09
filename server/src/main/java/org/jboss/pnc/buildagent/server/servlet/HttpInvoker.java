@@ -113,7 +113,7 @@ public class HttpInvoker extends HttpServlet {
         commandSession.handleOutput(buffer);
     }
 
-    private void onComplete(CommandSession commandSession, Status newStatus, Request request) {
+    private void onComplete(CommandSession commandSession, Status newStatus, Request callback) {
         TaskStatusUpdateEvent.Builder updateEventBuilder = TaskStatusUpdateEvent.newBuilder();
         try {
             String digest = stdoutChecksum.digest();
@@ -134,9 +134,9 @@ public class HttpInvoker extends HttpServlet {
         try {
             String data = objectMapper.writeValueAsString(updateEventBuilder.build());
             httpClient.invoke(
-                    request.getUrl().toURI(),
-                    request.getMethod(),
-                    request.getHeaders(),
+                    callback.getUrl().toURI(),
+                    callback.getMethod(),
+                    callback.getHeaders(),
                     data,
                     responseFuture,
                     retryConfig.getMaxRetries(),
