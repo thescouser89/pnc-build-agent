@@ -63,7 +63,7 @@ public class TestGetRunningProcesses {
     }
 
     @Test
-    public void getRunningProcesses() throws Exception {
+    public void getRunningProcesses() throws Throwable {
         String terminalUrl = "http://" + HOST + ":" + PORT;
 
         HttpURLConnection connection = retrieveProcessList();

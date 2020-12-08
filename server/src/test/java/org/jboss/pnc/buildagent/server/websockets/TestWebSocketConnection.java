@@ -90,16 +90,16 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void clientShouldBeAbleToRunRemoteCommandAndReceiveBinaryResults() throws Exception {
+    public void clientShouldBeAbleToRunRemoteCommandAndReceiveBinaryResults() throws Throwable {
         clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.BINARY);
     }
 
     @Test
-    public void clientShouldBeAbleToRunRemoteCommandAndReceiveTextResults() throws Exception {
+    public void clientShouldBeAbleToRunRemoteCommandAndReceiveTextResults() throws Throwable {
         clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode.TEXT);
     }
 
-    public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode responseMode) throws Exception {
+    public void clientShouldBeAbleToRunRemoteCommandAndReceiveResults(ResponseMode responseMode) throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToRunRemoteCommandAndReceiveResults" + responseMode;
 
         List<TaskStatusUpdateEvent> remoteResponseStatuses = new ArrayList<>();
@@ -130,7 +130,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void shouldExecuteTwoTasksAndWriteToLogs() throws Exception {
+    public void shouldExecuteTwoTasksAndWriteToLogs() throws Throwable {
 
         String context = this.getClass().getName() + ".shouldExecuteTwoTasksAndWriteToLogs";
 
@@ -162,7 +162,7 @@ public class TestWebSocketConnection {
 
     @Test
     @Ignore //Readline is not thread safe
-    public void shouldEnqueueNewTasksWhenOneIsRunning() throws Exception {
+    public void shouldEnqueueNewTasksWhenOneIsRunning() throws Throwable {
 
         String context = this.getClass().getName() + ".shouldEnqueueNewTasksWhenFirstIsRunning";
 
@@ -190,7 +190,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void shouldExecuteTwoTasksInSilentMode() throws Exception {
+    public void shouldExecuteTwoTasksInSilentMode() throws Throwable {
 
         String context = this.getClass().getName() + ".shouldExecuteTwoTasksInSilentMode";
 
@@ -221,7 +221,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void shouldExecuteAndCancelTheExecution() throws Exception {
+    public void shouldExecuteAndCancelTheExecution() throws Throwable {
 
         String context = this.getClass().getName() + ".shouldExecuteAndCancelTheExecution";
 
@@ -250,7 +250,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void clientShouldBeAbleToConnectToRunningProcess() throws Exception {
+    public void clientShouldBeAbleToConnectToRunningProcess() throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcess";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
@@ -278,7 +278,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode() throws Exception {
+    public void clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode() throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
@@ -310,7 +310,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void textClientShouldReciveOutputWhenCommandStartedInSilentMode() throws Exception {
+    public void textClientShouldReciveOutputWhenCommandStartedInSilentMode() throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
@@ -342,7 +342,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void clientShouldBeAbleToExecuteCommandWithoutListeningToResponse() throws Exception {
+    public void clientShouldBeAbleToExecuteCommandWithoutListeningToResponse() throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToExecuteCommandWithoutListeningToResponse";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
@@ -378,7 +378,7 @@ public class TestWebSocketConnection {
     }
 
     @Test
-    public void clientShouldBeAbleToConnectAndListenForOutputBeforeTheProcessStart() throws Exception {
+    public void clientShouldBeAbleToConnectAndListenForOutputBeforeTheProcessStart() throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessInDifferentResponseMode";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);

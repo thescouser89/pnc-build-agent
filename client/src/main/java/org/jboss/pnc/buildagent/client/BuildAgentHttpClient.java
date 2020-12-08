@@ -34,8 +34,6 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
     private final Request callback;
 
-    private final RetryConfig retryConfig;
-
     private String sessionId;
 
     /**
@@ -44,13 +42,12 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     @Deprecated
     public BuildAgentHttpClient(String termBaseUrl, URL callbackUrl, String callbackMethod)
             throws BuildAgentClientException {
-        super(termBaseUrl, 30000);
+        super(termBaseUrl, 30000, new RetryConfig(10, 500));
         this.callback = new Request(
                 callbackMethod,
                 callbackUrl,
                 Collections.emptyMap()
         );
-        this.retryConfig = new RetryConfig(10, 500);
         try {
             invokerUrl = new URL(termBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (MalformedURLException e) {
@@ -60,11 +57,11 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
     public BuildAgentHttpClient(HttpClientConfiguration configuration)
             throws BuildAgentClientException {
-        super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout());
+        super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout(), configuration.getRetryConfig());
         this.callback = configuration.getCallback();
-        this.retryConfig = configuration.getRetryConfig();
         try {
-            invokerUrl = new URL(configuration.getTermBaseUrl() + Constants.HTTP_INVOKER_FULL_PATH);
+            String agentBaseUrl = StringUtils.stripEndingSlash(configuration.getTermBaseUrl());
+            invokerUrl = new URL(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (MalformedURLException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
@@ -76,11 +73,15 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
      */
     public BuildAgentHttpClient(HttpClient httpClient, HttpClientConfiguration configuration)
             throws BuildAgentClientException {
-        super(httpClient, configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout());
+        super(
+                httpClient,
+                configuration.getTermBaseUrl(),
+                configuration.getLivenessResponseTimeout(),
+                configuration.getRetryConfig());
         this.callback = configuration.getCallback();
-        this.retryConfig = configuration.getRetryConfig();
         try {
-            invokerUrl = new URL(StringUtils.stripEndingSlash(configuration.getTermBaseUrl()) + Constants.HTTP_INVOKER_FULL_PATH);
+            String agentBaseUrl = StringUtils.stripEndingSlash(configuration.getTermBaseUrl());
+            invokerUrl = new URL(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (MalformedURLException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
@@ -88,6 +89,11 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
     @Override
     public void execute(Object command) throws BuildAgentClientException {
+        execute(command, 10, TimeUnit.SECONDS);
+    }
+
+    @Override
+    public void execute(Object command, long executeTimeout, TimeUnit unit) throws BuildAgentClientException {
         String cmd;
         if (command instanceof String) {
             cmd = (String) command;
@@ -115,13 +121,13 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         }
         HttpClient.Response response = null;
         try {
-            response = responseFuture.get(10, TimeUnit.SECONDS);
+            response = responseFuture.get(executeTimeout, unit);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new BuildAgentClientException("No response form the remote agent.", e);
         }
-        logger.debug("Response code: {}, body: {}.", response.getCode(), response.getString());
+        logger.debug("Response code: {}, body: {}.", response.getCode(), response.getStringResult());
         try {
-            InvokeResponse invokeResponse = objectMapper.readValue(response.getString(), InvokeResponse.class);
+            InvokeResponse invokeResponse = objectMapper.readValue(response.getStringResult().getString(), InvokeResponse.class);
             sessionId = invokeResponse.getSessionId();
         } catch (IOException e) {
             throw new BuildAgentClientException("Cannot read command invocation response.", e);

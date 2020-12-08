@@ -83,7 +83,7 @@ public class ConcurrentStdInOut {
 
 
     @Test
-    public void shouldNotMixStdInAndStdoutLines() throws Exception {
+    public void shouldNotMixStdInAndStdoutLines() throws Throwable {
         String longMessage = createLongMessage();
 //        String TEST_COMMAND = "java -cp ./target/test-classes/:./server/target/test-classes/ org.jboss.pnc.buildagent.server.MockProcess 1 0 " + longMessage + "";
 //        String TEST_COMMAND = "pwd";
@@ -112,11 +112,11 @@ public class ConcurrentStdInOut {
         log.info("Received status: {}", received);
 
         for (String response : responses) {
-            log.debug("Response line: {}", response);
+            log.info("Response line: {}", response);
         }
 
-        int commandOutputIndex = responses.indexOf("123456789123456789");
-        int commandInputIndex = responses.indexOf("+ echo 123456789123456789");
+        int commandInputIndex = responses.indexOf("+ echo abc");
+        int commandOutputIndex = responses.indexOf("abc");
 
         Assert.assertTrue("Command input have to be printed before its output.", commandOutputIndex > commandInputIndex);
     }

@@ -1,6 +1,7 @@
 package org.jboss.pnc.buildagent.client;
 
 import org.jboss.pnc.buildagent.api.ResponseMode;
+import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
@@ -17,6 +18,7 @@ public class SocketClientConfiguration extends ClientConfigurationBase {
         readOnly = builder.readOnly;
         livenessResponseTimeout = builder.livenessResponseTimeout;
         commandContext = builder.commandContext;
+        retryConfig = builder.retryConfig;
     }
 
     public static Builder newBuilder() {
@@ -30,6 +32,7 @@ public class SocketClientConfiguration extends ClientConfigurationBase {
         builder.responseMode = copy.getResponseMode();
         builder.readOnly = copy.isReadOnly();
         builder.commandContext = copy.getCommandContext();
+        builder.retryConfig = copy.getRetryConfig();
         return builder;
     }
 
@@ -51,6 +54,7 @@ public class SocketClientConfiguration extends ClientConfigurationBase {
         private ResponseMode responseMode = ResponseMode.SILENT;
         private boolean readOnly = false;
         private String commandContext = "";
+        public RetryConfig retryConfig = new RetryConfig(10, 500L);
 
         private Builder() {
         }
@@ -77,6 +81,11 @@ public class SocketClientConfiguration extends ClientConfigurationBase {
 
         public Builder commandContext(String commandContext) {
             this.commandContext = commandContext;
+            return this;
+        }
+
+        public Builder retryConfig(RetryConfig retryConfig) {
+            this.retryConfig = retryConfig;
             return this;
         }
 

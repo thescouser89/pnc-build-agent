@@ -33,4 +33,8 @@ public class Constants {
 
     public static final String HTTP_INVOKER_PATH = "/http-invoker";
     public static final String HTTP_INVOKER_FULL_PATH = SERVLET_PATH + HTTP_INVOKER_PATH;
+
+    public static final String FILE_UPLOAD_PATH = SERVLET_PATH + "/upload";
+    public static final String FILE_DOWNLOAD_PATH = SERVLET_PATH + "/download";
+
 }
