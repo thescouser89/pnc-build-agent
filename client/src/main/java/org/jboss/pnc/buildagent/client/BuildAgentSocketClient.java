@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,8 @@ import org.slf4j.LoggerFactory;
 import javax.websocket.ClientEndpointConfig;
 import javax.websocket.CloseReason;
 import javax.websocket.ContainerProvider;
+import javax.websocket.SendHandler;
+import javax.websocket.SendResult;
 import javax.websocket.Session;
 import javax.websocket.WebSocketContainer;
 import java.io.IOException;
@@ -40,6 +43,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -86,7 +92,7 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
             String commandContext,
             ResponseMode responseMode,
             boolean readOnly) throws TimeoutException, InterruptedException, BuildAgentClientException {
-        super(termBaseUrl, 30000);
+        super(termBaseUrl, 30000, new RetryConfig(10, 500L));
         this.commandContext = formatCommandContext(commandContext);
         this.responseMode = responseMode;
         this.readOnly = readOnly;
@@ -104,7 +110,7 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
             SocketClientConfiguration configuration)
             throws TimeoutException, InterruptedException, BuildAgentClientException {
-        super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout());
+        super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout(), configuration.getRetryConfig());
         this.commandContext = formatCommandContext(configuration.getCommandContext());
         this.responseMode = configuration.getResponseMode();
         this.readOnly = configuration.isReadOnly();
@@ -128,7 +134,7 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
             SocketClientConfiguration configuration)
             throws TimeoutException, InterruptedException, BuildAgentClientException {
-        super(httpClient, configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout());
+        super(httpClient, configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout(), configuration.getRetryConfig());
         this.commandContext = formatCommandContext(configuration.getCommandContext());
         this.responseMode = configuration.getResponseMode();
         this.readOnly = configuration.isReadOnly();
@@ -147,17 +153,34 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
         execute(command);
     }
 
+    @Override
     public void execute(Object command) throws BuildAgentClientException {
-        log.info("Executing remote command [{}]...", command);
-        javax.websocket.RemoteEndpoint.Basic remoteEndpoint = commandExecutingEndpoint.getRemoteEndpoint();
+        execute(command, 60, TimeUnit.SECONDS);
+    }
 
+    @Override
+    public void execute(Object command, long executeTimeout, TimeUnit unit) throws BuildAgentClientException {
+        log.info("Executing remote command [{}]...", command);
+        javax.websocket.RemoteEndpoint.Async remoteEndpoint = commandExecutingEndpoint.getRemoteEndpoint();
+
+        remoteEndpoint.setSendTimeout(TimeUnit.MILLISECONDS.convert(executeTimeout, unit));
         ByteBuffer byteBuffer = prepareRemoteCommand(command);
 
         try {
             log.debug("Sending remote command...");
-            remoteEndpoint.sendBinary(byteBuffer);
+            CompletableFuture<SendResult> resultFuture = new CompletableFuture<>();
+            SendHandler resultHandler = result -> {
+                if (result.isOK()) {
+                    resultFuture.complete(result);
+                } else {
+                    resultFuture.completeExceptionally(
+                            new BuildAgentClientException("Remote command execution failed.", result.getException()));
+                }
+            };
+            remoteEndpoint.sendBinary(byteBuffer, resultHandler);
+            resultFuture.get(executeTimeout, unit);
             log.debug("Command sent.");
-        } catch (IOException e) {
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Cannot execute remote command.", e);
         }
     }

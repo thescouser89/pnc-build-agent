@@ -75,8 +75,8 @@ public class RemoteEndpoint extends Endpoint {
         onBinaryMessageConsumer = onBinaryMessage;
     }
 
-    public javax.websocket.RemoteEndpoint.Basic getRemoteEndpoint() {
-        return session.getBasicRemote();
+    public javax.websocket.RemoteEndpoint.Async getRemoteEndpoint() {
+        return session.getAsyncRemote();
     }
 
     @Override

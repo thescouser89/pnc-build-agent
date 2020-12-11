@@ -68,7 +68,7 @@ public class TestWebSocketConnectionWithBindPath {
     }
 
     @Test
-    public void clientShouldBeAbleToReConnect() throws Exception {
+    public void clientShouldBeAbleToReConnect() throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessWithBindPath";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);
@@ -102,7 +102,7 @@ public class TestWebSocketConnectionWithBindPath {
     }
 
     @Test
-    public void clientShouldBeAbleToReConnectWithDifferentResponseMode() throws Exception {
+    public void clientShouldBeAbleToReConnectWithDifferentResponseMode() throws Throwable {
         String context = this.getClass().getName() + ".clientShouldBeAbleToConnectToRunningProcessWithBindPath";
 
         ObjectWrapper<Boolean> completed = new ObjectWrapper<>(false);

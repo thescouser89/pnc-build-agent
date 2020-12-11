@@ -50,14 +50,9 @@ public class TestFileUpload extends FileUploadAbstract {
     }
 
     @Test
-    public void uploadFile() throws Exception {
+    public void uploadFile() throws Throwable {
         super.uploadFile(HOST, PORT, "");
         Thread.sleep(3000);
     }
 
-    private void assertFileWasUploaded(Path fileUploadPath, String expectedFileContent) throws FileNotFoundException {
-        String actualFileContent = new Scanner(fileUploadPath.toFile()).useDelimiter("\\Z").next();
-        log.info("Content written to file: {}", actualFileContent);
-        Assert.assertEquals(expectedFileContent, actualFileContent);
-    }
 }

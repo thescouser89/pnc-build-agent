@@ -18,6 +18,10 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.client.BuildAgentClient;
+import org.jboss.pnc.buildagent.client.BuildAgentHttpClient;
+import org.jboss.pnc.buildagent.client.HttpClientConfiguration;
+import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -25,12 +29,11 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.io.PrintWriter;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -53,7 +56,7 @@ public class TestFileDownload {
     }
 
     @Test
-    public void downloadFile() throws Exception {
+    public void downloadFile() throws Throwable {
         Path pwd = Paths.get("").toAbsolutePath();
         Path filePath = Paths.get(pwd.toString(), "/test-file.txt");
 
@@ -63,24 +66,17 @@ public class TestFileDownload {
             out.write(fileContent);
         }
 
-        URL url = new URL("http://" + HOST + ":" + PORT + "/servlet/download" + filePath);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
+        HttpClientConfiguration configuration = HttpClientConfiguration.newBuilder()
+                .termBaseUrl("http://" + HOST + ":" + PORT)
+                .build();
+        BuildAgentClient buildAgentHttpClient = new BuildAgentHttpClient(configuration);
+        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
+        buildAgentHttpClient.downloadFile(filePath, responseFuture);
 
-        connection.setDoOutput(true);
-        connection.setDoInput(true);
-
-        int contentLength = connection.getContentLength();
-
-        byte[] receivedBytes = new byte[contentLength];
-        try (InputStream inputStream = connection.getInputStream()) {
-            inputStream.read(receivedBytes);
-        }
-
-        Assert.assertEquals(connection.getResponseMessage(), 200, connection.getResponseCode());
-        String receivedContent = new String(receivedBytes);
-        log.info("Received file content: {}", receivedContent);
-        Assert.assertEquals(fileContent, receivedContent);
+        HttpClient.Response response = responseFuture.get(10, TimeUnit.SECONDS);
+        Assert.assertEquals("Invalid response code.", 200, response.getCode());
+        log.info("Received file content: {}", response.getStringResult());
+        Assert.assertEquals(fileContent, response.getStringResult().getString());
 
         filePath.toFile().delete();
     }

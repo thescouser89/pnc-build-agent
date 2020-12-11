@@ -9,7 +9,6 @@ import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 public class HttpClientConfiguration extends ClientConfigurationBase {
 
     private Request callback;
-    private RetryConfig retryConfig;
 
     private HttpClientConfiguration(Builder builder) {
         termBaseUrl = builder.termBaseUrl;
@@ -35,15 +34,11 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
         return callback;
     }
 
-    public RetryConfig getRetryConfig() {
-        return retryConfig;
-    }
-
     public static final class Builder {
         private String termBaseUrl;
         private Long livenessResponseTimeout = 30000L;
         private Request callback;
-        private RetryConfig retryConfig;
+        private RetryConfig retryConfig = new RetryConfig(10, 500L);
 
         private Builder() {
         }

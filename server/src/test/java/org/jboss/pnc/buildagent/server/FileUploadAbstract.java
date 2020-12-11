@@ -18,6 +18,9 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.client.BuildAgentHttpClient;
+import org.jboss.pnc.buildagent.client.HttpClientConfiguration;
+import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.junit.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,9 +29,13 @@ import java.io.FileNotFoundException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Scanner;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -37,26 +44,25 @@ public class FileUploadAbstract {
 
     private static Logger log = LoggerFactory.getLogger(FileUploadAbstract.class);
 
-    public void uploadFile(String host, int port, String contextPath) throws Exception {
+    public void uploadFile(String host, int port, String contextPath) throws Throwable {
         Path pwd = Paths.get("").toAbsolutePath();
         Path fileUploadPath = Paths.get(pwd.toString(), "/test-upload.txt");
-        URL url = new URL("http://" + host + ":" + port + contextPath + "/servlet/upload" + fileUploadPath);
-        log.info("Uploading file to {}.", url.toString());
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("PUT");
-
-        connection.setDoOutput(true);
-        connection.setDoInput(true);
 
         String fileContent = "The quick brown fox jumps over the lazy dog.";
-        byte[] fileContentBytes = fileContent.getBytes();
-        connection.setRequestProperty("Content-Length", "" + Integer.toString(fileContentBytes.length));
 
-        try (OutputStream outputStream = connection.getOutputStream()) {
-            outputStream.write(fileContentBytes);
-        }
+        HttpClientConfiguration configuration = HttpClientConfiguration.newBuilder()
+                .termBaseUrl("http://" + host + ":" + port + contextPath)
+                .build();
+        BuildAgentHttpClient buildAgentHttpClient = new BuildAgentHttpClient(configuration);
+        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
+        buildAgentHttpClient.uploadFile(
+                ByteBuffer.wrap(fileContent.getBytes(StandardCharsets.UTF_8)),
+                fileUploadPath,
+                responseFuture
+                );
 
-        Assert.assertEquals(connection.getResponseMessage(), 200, connection.getResponseCode());
+        HttpClient.Response response = responseFuture.get(10, TimeUnit.SECONDS);
+        Assert.assertEquals("Invalid response code.", 200, response.getCode());
 
         assertFileWasUploaded(fileUploadPath, fileContent);
 

@@ -9,8 +9,6 @@ import io.undertow.connector.ByteBufferPool;
 import io.undertow.server.DefaultByteBufferPool;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
-import io.undertow.util.StringReadChannelListener;
-import io.undertow.util.StringWriteChannelListener;
 import org.jboss.pnc.buildagent.common.concurrent.MDCScheduledThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,13 +20,15 @@ import org.xnio.XnioWorker;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -40,7 +40,7 @@ public class HttpClient implements Closeable {
 
     private final ByteBufferPool buffer;
 
-    private static final OptionMap DEFAULT_OPTIONS;
+    public static final OptionMap DEFAULT_OPTIONS;
 
     private ScheduledExecutorService executor = new MDCScheduledThreadPoolExecutor(4);
 
@@ -49,7 +49,9 @@ public class HttpClient implements Closeable {
                 .set(Options.WORKER_IO_THREADS, 8)
                 .set(Options.TCP_NODELAY, true)
                 .set(Options.KEEP_ALIVE, true)
-                .set(Options.WORKER_NAME, "Build Agent Http Client");
+                .set(Options.WORKER_NAME, "Build Agent Http Client")
+                .set(Options.READ_TIMEOUT, 30000)
+                .set(Options.WRITE_TIMEOUT, 30000);
         DEFAULT_OPTIONS = builder.getMap();
     }
 
@@ -72,7 +74,7 @@ public class HttpClient implements Closeable {
 
     public void invoke(URI uri, String requestMethod, String data, CompletableFuture<Response> responseFuture) {
         logger.debug("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
-        invokeAttempt(uri, requestMethod, Collections.emptyMap(), data, responseFuture, 0, 0, 0L);
+        invokeAttempt(uri, requestMethod, Collections.emptyMap(), ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, 0, 0L, -1L);
     }
 
     public void invoke(
@@ -85,7 +87,35 @@ public class HttpClient implements Closeable {
             long waitBeforeRetry) {
         logger.info("Making request {} {}; Headers: {} request data: {}.",
                 requestMethod, uri.toString(), requestHeaders, data);
-        invokeAttempt(uri, requestMethod, requestHeaders, data, responseFuture, 0, maxRetries, waitBeforeRetry);
+        invokeAttempt(uri, requestMethod, requestHeaders, ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, maxRetries, waitBeforeRetry, -1L);
+    }
+
+    public void invoke(
+            URI uri,
+            String requestMethod,
+            Map<String, String> requestHeaders,
+            String data,
+            CompletableFuture<Response> responseFuture,
+            int maxRetries,
+            long waitBeforeRetry,
+            long maxDownloadSize) {
+        logger.info("Making request {} {}; Headers: {} request data: {}.",
+                requestMethod, uri.toString(), requestHeaders, data);
+        invokeAttempt(uri, requestMethod, requestHeaders, ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize);
+    }
+
+    public void invoke(
+            URI uri,
+            String requestMethod,
+            Map<String, String> requestHeaders,
+            ByteBuffer data,
+            CompletableFuture<Response> responseFuture,
+            int maxRetries,
+            long waitBeforeRetry,
+            long maxDownloadSize) {
+        logger.info("Making request {} {}; Headers: {} request data: {}.",
+                requestMethod, uri.toString(), requestHeaders, data);
+        invokeAttempt(uri, requestMethod, requestHeaders, data, responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize);
     }
 
     /**
@@ -103,11 +133,12 @@ public class HttpClient implements Closeable {
             URI uri,
             String requestMethod,
             Map<String, String> requestHeaders,
-            String data,
+            ByteBuffer data,
             CompletableFuture<Response> responseFuture,
             int attempt,
             int maxRetries,
-            long waitBeforeRetry) {
+            long waitBeforeRetry,
+            long maxDownloadSize) {
         if (attempt > 0) {
             logger.warn(
                     "Retrying ({}) {} request to the endpoint {}; request data: {}.",
@@ -156,12 +187,12 @@ public class HttpClient implements Closeable {
             }
         };
 
-        CompletableFuture<String> onResponseCompletedFuture = new CompletableFuture<>();
-        Function<ByteBufferPool, StringReadChannelListener> stringReadChannelListener = (bufferPool) ->
-            new StringReadChannelListener(bufferPool) {
+        CompletableFuture<StringResult> onResponseCompletedFuture = new CompletableFuture<>();
+        Function<ByteBufferPool, LimitingStringReadChannelListener> stringReadChannelListener = (bufferPool) ->
+            new LimitingStringReadChannelListener(bufferPool, maxDownloadSize) {
                 @Override
-                protected void stringDone(String string) {
-                    onResponseCompletedFuture.complete(string);
+                protected void stringDone(StringResult result) {
+                    onResponseCompletedFuture.complete(result);
                 }
                 @Override
                 protected void error(IOException e) {
@@ -182,13 +213,12 @@ public class HttpClient implements Closeable {
                 request.getRequestHeaders().put(Headers.HOST, uri.getHost());
                 request.getRequestHeaders().put(Headers.TRANSFER_ENCODING, "chunked");
                 requestHeaders.forEach((k,v) -> request.getRequestHeaders().put(new HttpString(k), v));
-
                 connection.sendRequest(request, onRequestStart);
                 return onRequestStartFuture;
             }
         ).thenCompose(exchange -> {
-                new StringWriteChannelListener(data).setup(exchange.getRequestChannel());
-                exchange.setResponseListener(onResponseStarted);
+            new ByteBufferWriteChannelListener(data).setup(exchange.getRequestChannel());
+            exchange.setResponseListener(onResponseStarted);
                 return onResponseStartedFuture;
             }
         ).thenCompose(exchange -> {
@@ -201,7 +231,7 @@ public class HttpClient implements Closeable {
                 }
                 return onResponseCompletedFuture;
             }
-        ).handle((string, throwable) -> {
+        ).handle((stringResult, throwable) -> {
             if (throwable != null) {
                 logger.error("Error: ", throwable);
                 if (maxRetries > 0 && attempt < maxRetries) {
@@ -214,7 +244,8 @@ public class HttpClient implements Closeable {
                                     responseFuture,
                                     attempt + 1,
                                     maxRetries,
-                                    waitBeforeRetry),
+                                    waitBeforeRetry,
+                                    maxDownloadSize),
                             waitBeforeRetry * attempt, TimeUnit.MILLISECONDS
                     );
                 } else {
@@ -222,7 +253,7 @@ public class HttpClient implements Closeable {
                     responseFuture.completeExceptionally(throwable);
                 }
             } else {
-                response.string = string;
+                response.stringResult = stringResult;
                 logger.info("Invocation completed. Response code: " + response.getCode());
                 responseFuture.complete(response);
             }
@@ -239,14 +270,22 @@ public class HttpClient implements Closeable {
 
     public static class Response {
         private int code;
-        private String string;
+        private StringResult stringResult;
+
+        public Response() {
+        }
+
+        public Response(int code, StringResult stringResult) {
+            this.code = code;
+            this.stringResult = stringResult;
+        }
 
         public int getCode() {
             return code;
         }
 
-        public String getString() {
-            return string;
+        public StringResult getStringResult() {
+            return stringResult;
         }
     }
 }

@@ -40,8 +40,6 @@ public class Upload extends HttpServlet {
     @Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         log.info("Received new file upload request.");
-        int fileSize = request.getContentLength();
-        log.debug("File size: {}.", fileSize);
         String fileDestination = request.getPathInfo();
         if (!fileDestination.startsWith("/")) {
             fileDestination = "/" + fileDestination;
@@ -67,14 +65,7 @@ public class Upload extends HttpServlet {
             }
         }
 
-        log.debug("Upload completed.");
-
-        if (totalBytes != fileSize) {
-            log.error("Did not received complete file! Expected {} length received {} length.", fileSize, totalBytes);
-            response.sendError(500, "Did not received complete file!");
-        } else {
-            log.info("Successfully uploaded {}.", fileDestination);
-            response.setStatus(200);
-        }
+        log.info("Uploaded {}.", fileDestination);
+        response.setStatus(200);
     }
 }

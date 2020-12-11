@@ -46,7 +46,7 @@ public class TestFileUploadWithContextPath extends FileUploadAbstract {
     }
 
     @Test
-    public void uploadFile() throws Exception {
+    public void uploadFile() throws Throwable {
         super.uploadFile(HOST, PORT, CONTEXT_PATH);
     }
 
