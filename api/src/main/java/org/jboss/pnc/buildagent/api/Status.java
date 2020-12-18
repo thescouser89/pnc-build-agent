@@ -27,6 +27,7 @@ public enum Status {
     RUNNING (false),
     COMPLETED (true),
     FAILED (true),
+    SYSTEM_ERROR(true),
     INTERRUPTED (true);
 
     private final boolean final_;

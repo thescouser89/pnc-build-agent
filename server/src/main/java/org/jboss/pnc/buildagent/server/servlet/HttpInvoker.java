@@ -125,7 +125,7 @@ public class HttpInvoker extends HttpServlet {
         } catch (IOException e) {
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
-                    .newStatus(org.jboss.pnc.buildagent.api.Status.FAILED)
+                    .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
                     .message("Unable to flush stdout: " + e.getMessage());
         }
 
