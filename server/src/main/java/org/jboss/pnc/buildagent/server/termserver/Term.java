@@ -145,7 +145,11 @@ public class Term {
                         .forEach(ThrowingConsumer.wrap(ch -> ch.flush()));
             } catch (Exception e) {
                 log.error("Cannot flush primary RO channel.", e);
-                event = new TaskStatusUpdateEvent(event.getTaskId(),event.getOldStatus(), org.jboss.pnc.buildagent.api.Status.FAILED, event.getContext());
+                event = TaskStatusUpdateEvent.newBuilder()
+                        .taskId(event.getTaskId())
+                        .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
+                        .message("Cannot flush primary RO channel. " + e.getMessage())
+                        .build();
             }
             completeHandle.setCompletionEventAndRun(event);
         } else {
