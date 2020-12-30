@@ -70,8 +70,7 @@ public class TestFileDownload {
                 .termBaseUrl("http://" + HOST + ":" + PORT)
                 .build();
         BuildAgentClient buildAgentHttpClient = new BuildAgentHttpClient(configuration);
-        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
-        buildAgentHttpClient.downloadFile(filePath, responseFuture);
+        CompletableFuture<HttpClient.Response> responseFuture = buildAgentHttpClient.downloadFile(filePath);
 
         HttpClient.Response response = responseFuture.get(10, TimeUnit.SECONDS);
         Assert.assertEquals("Invalid response code.", 200, response.getCode());

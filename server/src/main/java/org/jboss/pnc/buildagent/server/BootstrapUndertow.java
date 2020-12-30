@@ -31,6 +31,7 @@ import org.jboss.pnc.buildagent.api.Constants;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
+import org.jboss.pnc.buildagent.server.httpinvoker.Heartbeat;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.servlet.Download;
 import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
@@ -56,6 +57,7 @@ import static io.undertow.servlet.Servlets.defaultContainer;
 import static io.undertow.servlet.Servlets.deployment;
 import static io.undertow.servlet.Servlets.servlet;
 import static org.jboss.pnc.buildagent.api.Constants.HTTP_INVOKER_PATH;
+import static org.jboss.pnc.buildagent.api.Constants.RUNNING_PROCESSES;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -117,7 +119,11 @@ public class BootstrapUndertow {
             servletBuilder.addServlet(
                     servlet("HttpInvoker",
                             HttpInvoker.class,
-                            new HttpInvokerFactory(readOnlyChannels, httpClient, new SessionRegistry(), retryConfig)
+                            new HttpInvokerFactory(readOnlyChannels,
+                                    httpClient,
+                                    new SessionRegistry(),
+                                    retryConfig,
+                                    new Heartbeat(httpClient))
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
         }
 
@@ -244,7 +250,7 @@ public class BootstrapUndertow {
             exchange.getResponseSender().send(message);
             return;
         }
-        if (pathMatches(requestPath, httpPath + "processes")) {
+        if (pathMatches(requestPath, RUNNING_PROCESSES)) {
             log.debug("Processes handler requested.");
             getProcessActiveTerms().handleRequest(exchange);
             return;

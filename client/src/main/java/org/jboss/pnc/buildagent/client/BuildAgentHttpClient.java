@@ -1,9 +1,9 @@
 package org.jboss.pnc.buildagent.client;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jboss.pnc.api.dto.HeartbeatConfig;
+import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.api.Constants;
-import org.jboss.pnc.buildagent.api.httpinvoke.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.Cancel;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeResponse;
@@ -14,11 +14,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Collections;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -28,11 +31,12 @@ import java.util.concurrent.TimeoutException;
  */
 public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildAgentClient {
     private final Logger logger = LoggerFactory.getLogger(BuildAgentHttpClient.class);
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final URL invokerUrl;
+    private final URI invokerUrl;
 
     private final Request callback;
+
+    private final Optional<HeartbeatConfig> heartbeatConfig;
 
     private String sessionId;
 
@@ -46,11 +50,12 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         this.callback = new Request(
                 callbackMethod,
                 callbackUrl,
-                Collections.emptyMap()
+                Collections.emptySet()
         );
+        this.heartbeatConfig = Optional.empty();
         try {
-            invokerUrl = new URL(termBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
-        } catch (MalformedURLException e) {
+            invokerUrl = new URI(termBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
+        } catch (URISyntaxException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
     }
@@ -59,10 +64,11 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
             throws BuildAgentClientException {
         super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout(), configuration.getRetryConfig());
         this.callback = configuration.getCallback();
+        this.heartbeatConfig = configuration.getHeartbeatConfig();
         try {
             String agentBaseUrl = StringUtils.stripEndingSlash(configuration.getTermBaseUrl());
-            invokerUrl = new URL(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
-        } catch (MalformedURLException e) {
+            invokerUrl = new URI(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
+        } catch (URISyntaxException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
     }
@@ -79,10 +85,11 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
                 configuration.getLivenessResponseTimeout(),
                 configuration.getRetryConfig());
         this.callback = configuration.getCallback();
+        this.heartbeatConfig = configuration.getHeartbeatConfig();
         try {
             String agentBaseUrl = StringUtils.stripEndingSlash(configuration.getTermBaseUrl());
-            invokerUrl = new URL(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
-        } catch (MalformedURLException e) {
+            invokerUrl = new URI(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
+        } catch (URISyntaxException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
     }
@@ -94,32 +101,9 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
     @Override
     public void execute(Object command, long executeTimeout, TimeUnit unit) throws BuildAgentClientException {
-        String cmd;
-        if (command instanceof String) {
-            cmd = (String) command;
-        } else {
-            throw new BuildAgentClientException("Http client supports only String commands.");
-        }
+        CompletableFuture<HttpClient.Response> responseFuture =  internalExecuteAsync(command, heartbeatConfig);
 
-        InvokeRequest request = new InvokeRequest(cmd, this.callback);
-        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
-        try {
-            String requestJson = objectMapper.writeValueAsString(request);
-            getHttpClient().invoke(
-                    invokerUrl.toURI(),
-                    "POST",
-                    Collections.emptyMap(),
-                    requestJson,
-                    responseFuture,
-                    retryConfig.getMaxRetries(),
-                    retryConfig.getWaitBeforeRetry()
-                );
-        } catch (JsonProcessingException e) {
-            throw new BuildAgentClientException("Cannot serialize request.", e);
-        } catch (URISyntaxException e) {
-            throw new BuildAgentClientException("Invalid command execution url.", e);
-        }
-        HttpClient.Response response = null;
+        HttpClient.Response response;
         try {
             response = responseFuture.get(executeTimeout, unit);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -134,6 +118,46 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         }
     }
 
+    @Override
+    public CompletableFuture<String> executeAsync(Object command) {
+        return internalExecuteAsync(command, this.heartbeatConfig)
+                .thenApply(response -> {
+                    try {
+                        logger.debug("Response code: {}, body: {}.", response.getCode(), response.getStringResult());
+                        InvokeResponse invokeResponse = objectMapper.readValue(response.getStringResult().getString(), InvokeResponse.class);
+                        return invokeResponse.getSessionId();
+                    } catch (Exception e) {
+                        throw new CompletionException(new BuildAgentClientException("Cannot read command invocation response.", e));
+                    }
+                });
+    }
+
+    private CompletableFuture<HttpClient.Response> internalExecuteAsync(
+            Object command,
+            Optional<HeartbeatConfig> heartbeatConfig) {
+        String cmd;
+        if (command instanceof String) {
+            cmd = (String) command;
+        } else {
+            CompletableFuture<HttpClient.Response> result = new CompletableFuture<>();
+            result.completeExceptionally(new BuildAgentClientException("Http client supports only String commands."));
+            return result;
+        }
+
+        return asJson(new InvokeRequest(cmd, this.callback, heartbeatConfig.orElse(null)))
+                .thenCompose(requestJson -> {
+            Set<Request.Header> headers = Collections.emptySet();
+            return getHttpClient().invoke(
+                    invokerUrl,
+                    "POST",
+                    headers,
+                    requestJson,
+                    retryConfig.getMaxRetries(),
+                    retryConfig.getWaitBeforeRetry()
+            );
+        });
+    }
+
     /**
      *
      * @return true if cancel was successful
@@ -141,25 +165,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
      */
     @Override
     public void cancel() throws BuildAgentClientException {
-        Cancel request = new Cancel(sessionId);
-        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
-        try {
-            String requestJson = objectMapper.writeValueAsString(request);
-            getHttpClient().invoke(
-                    invokerUrl.toURI(),
-                    "PUT",
-                    Collections.emptyMap(),
-                    requestJson,
-                    responseFuture,
-                    retryConfig.getMaxRetries(),
-                    retryConfig.getWaitBeforeRetry());
-        } catch (JsonProcessingException e) {
-            throw new BuildAgentClientException("Cannot serialize cancel request.", e);
-        } catch (IOException e) {
-            throw new BuildAgentClientException("Cannot invoke cancel.", e);
-        } catch (URISyntaxException e) {
-            throw new BuildAgentClientException("Invalid cancel url.", e);
-        }
+        CompletableFuture<HttpClient.Response> responseFuture = cancel(sessionId);
         try {
             HttpClient.Response response = responseFuture.get(5, TimeUnit.SECONDS);
             if (response.getCode() != 200) {
@@ -168,6 +174,31 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new BuildAgentClientException("Error reading cancel request.", e);
         }
+    }
+
+    @Override
+    public CompletableFuture<HttpClient.Response> cancel(String sessionId) {
+        return asJson(new Cancel(sessionId))
+                .thenCompose(requestJson -> {
+                    return getHttpClient().invoke(
+                            invokerUrl,
+                            "PUT",
+                            Collections.emptySet(),
+                            requestJson,
+                            retryConfig.getMaxRetries(),
+                            retryConfig.getWaitBeforeRetry());
+
+                });
+    }
+
+    private CompletableFuture<String> asJson(Object request) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return objectMapper.writeValueAsString(request);
+            } catch (JsonProcessingException e) {
+                throw new CompletionException(new BuildAgentClientException("Cannot serialize request object.", e));
+            }
+        });
     }
 
     @Override

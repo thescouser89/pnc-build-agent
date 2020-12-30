@@ -9,6 +9,7 @@ import io.undertow.connector.ByteBufferPool;
 import io.undertow.server.DefaultByteBufferPool;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
+import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.common.concurrent.MDCScheduledThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,9 +21,10 @@ import org.xnio.XnioWorker;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -72,50 +74,76 @@ public class HttpClient implements Closeable {
         this.buffer = buffer;
     }
 
-    public void invoke(URI uri, String requestMethod, String data, CompletableFuture<Response> responseFuture) {
+    public CompletableFuture<Response> invoke(URI uri, String requestMethod, String data) {
+        CompletableFuture<Response> responseFuture = new CompletableFuture<>();
         logger.debug("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
-        invokeAttempt(uri, requestMethod, Collections.emptyMap(), ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, 0, 0L, -1L);
+        invokeAttempt(uri, requestMethod, Collections.emptySet(), ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, 0, 0L, -1L);
+        return responseFuture;
     }
 
-    public void invoke(
+    public CompletableFuture<Response> invoke(
             URI uri,
             String requestMethod,
-            Map<String, String> requestHeaders,
+            Set<Request.Header> requestHeaders,
             String data,
-            CompletableFuture<Response> responseFuture,
             int maxRetries,
             long waitBeforeRetry) {
+        CompletableFuture<Response> responseFuture = new CompletableFuture<>();
         logger.info("Making request {} {}; Headers: {} request data: {}.",
                 requestMethod, uri.toString(), requestHeaders, data);
         invokeAttempt(uri, requestMethod, requestHeaders, ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, maxRetries, waitBeforeRetry, -1L);
+        return responseFuture;
     }
 
-    public void invoke(
+    public CompletableFuture<Response> invoke(
             URI uri,
             String requestMethod,
-            Map<String, String> requestHeaders,
+            Set<Request.Header> requestHeaders,
             String data,
-            CompletableFuture<Response> responseFuture,
             int maxRetries,
             long waitBeforeRetry,
             long maxDownloadSize) {
         logger.info("Making request {} {}; Headers: {} request data: {}.",
                 requestMethod, uri.toString(), requestHeaders, data);
+        CompletableFuture<Response> responseFuture = new CompletableFuture<>();
         invokeAttempt(uri, requestMethod, requestHeaders, ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize);
+        return responseFuture;
     }
 
-    public void invoke(
+    public CompletableFuture<Response> invoke(
             URI uri,
             String requestMethod,
-            Map<String, String> requestHeaders,
+            Set<Request.Header> requestHeaders,
             ByteBuffer data,
-            CompletableFuture<Response> responseFuture,
             int maxRetries,
             long waitBeforeRetry,
             long maxDownloadSize) {
         logger.info("Making request {} {}; Headers: {} request data: {}.",
                 requestMethod, uri.toString(), requestHeaders, data);
+        CompletableFuture<Response> responseFuture = new CompletableFuture<>();
         invokeAttempt(uri, requestMethod, requestHeaders, data, responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize);
+        return responseFuture;
+    }
+
+    public CompletableFuture<Response> invoke(
+            Request request,
+            ByteBuffer data,
+            int maxRetries,
+            long waitBeforeRetry,
+            long maxDownloadSize) {
+        logger.info("Making request {} {}; Headers: {} request data: {}.",
+                request.getMethod(), request.getUrl(), request.getHeaders(), data);
+
+        CompletableFuture<Response> responseFuture = new CompletableFuture<>();
+        URI uri;
+        try {
+            uri = request.getUrl().toURI();
+        } catch (URISyntaxException e) {
+            responseFuture.completeExceptionally(e);
+            return responseFuture;
+        }
+        invokeAttempt(uri, request.getMethod(), request.getHeaders(), data, responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize);
+        return responseFuture;
     }
 
     /**
@@ -132,7 +160,7 @@ public class HttpClient implements Closeable {
     private void invokeAttempt(
             URI uri,
             String requestMethod,
-            Map<String, String> requestHeaders,
+            Set<Request.Header> requestHeaders,
             ByteBuffer data,
             CompletableFuture<Response> responseFuture,
             int attempt,
@@ -212,7 +240,8 @@ public class HttpClient implements Closeable {
                 request.setPath(uri.getPath());
                 request.getRequestHeaders().put(Headers.HOST, uri.getHost());
                 request.getRequestHeaders().put(Headers.TRANSFER_ENCODING, "chunked");
-                requestHeaders.forEach((k,v) -> request.getRequestHeaders().put(new HttpString(k), v));
+                requestHeaders.forEach((header) -> request.getRequestHeaders()
+                        .put(new HttpString(header.getName()), header.getValue()));
                 connection.sendRequest(request, onRequestStart);
                 return onRequestStartFuture;
             }
@@ -223,7 +252,8 @@ public class HttpClient implements Closeable {
             }
         ).thenCompose(exchange -> {
                 response.code = exchange.getResponse().getResponseCode();
-                if (response.getCode() == 503) { //retry if 503 Service Unavailable
+                //retry if 503 Service Unavailable or 504 Gateway Timeout
+                if (response.getCode() == 503 || response.getCode() == 504) {
                     onResponseCompletedFuture.completeExceptionally(
                             new RuntimeException("Received response code: " + response.getCode()));
                 } else {

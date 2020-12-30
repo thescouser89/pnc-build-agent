@@ -232,7 +232,7 @@ public class TestWebSocketConnection {
             if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING) ) {
                 running.set(true);
             }
-            if (statusUpdateEvent.getNewStatus().equals(Status.FAILED) ) {
+            if (statusUpdateEvent.getNewStatus().equals(Status.INTERRUPTED) ) {
                 interrupted.set(true);
             }
         };

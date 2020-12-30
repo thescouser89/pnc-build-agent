@@ -1,6 +1,9 @@
 package org.jboss.pnc.buildagent.client;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
+import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.StringUtils;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
@@ -14,16 +17,17 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static io.undertow.util.Headers.CONTENT_LENGTH_STRING;
 import static org.jboss.pnc.buildagent.api.Constants.FILE_DOWNLOAD_PATH;
 import static org.jboss.pnc.buildagent.api.Constants.FILE_UPLOAD_PATH;
+import static org.jboss.pnc.buildagent.api.Constants.RUNNING_PROCESSES;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -31,6 +35,7 @@ import static org.jboss.pnc.buildagent.api.Constants.FILE_UPLOAD_PATH;
 public abstract class BuildAgentClientBase implements Closeable {
 
     private final Logger log = Logger.getLogger(BuildAgentClientBase.class);
+    final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Optional<HttpClient> internalHttpClient;
     private final Optional<HttpClient> httpClient;
@@ -39,6 +44,7 @@ public abstract class BuildAgentClientBase implements Closeable {
     protected final RetryConfig retryConfig;
     private final URL fileUploadUrl;
     private final URL fileDownloadUrl;
+    private final URL processListUrl;
 
     public BuildAgentClientBase(String termBaseUrl, long livenessResponseTimeout, RetryConfig retryConfig) throws BuildAgentClientException {
         this.livenessResponseTimeout = livenessResponseTimeout;
@@ -56,6 +62,12 @@ public abstract class BuildAgentClientBase implements Closeable {
             fileDownloadUrl = new URL(termBaseUrl + FILE_DOWNLOAD_PATH);
         } catch (MalformedURLException e) {
             throw new BuildAgentClientException("Invalid file download url.", e);
+        }
+
+        try {
+            processListUrl = new URL(termBaseUrl + RUNNING_PROCESSES);
+        } catch (MalformedURLException e) {
+            throw new BuildAgentClientException("Invalid process list url.", e);
         }
 
         try {
@@ -94,11 +106,16 @@ public abstract class BuildAgentClientBase implements Closeable {
         } catch (MalformedURLException e) {
             throw new BuildAgentClientException("Invalid file download url.", e);
         }
+
+        try {
+            processListUrl = new URL(termBaseUrl + RUNNING_PROCESSES);
+        } catch (MalformedURLException e) {
+            throw new BuildAgentClientException("Invalid process list url.", e);
+        }
     }
 
     public boolean isServerAlive() {
-        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
-        getHttpClient().invoke(livenessProbeLocation, "HEAD", "", responseFuture);
+        CompletableFuture<HttpClient.Response> responseFuture = getHttpClient().invoke(livenessProbeLocation, "HEAD", "");
         try {
             HttpClient.Response response = responseFuture.get(livenessResponseTimeout, TimeUnit.MILLISECONDS);
             boolean isSuccess = response.getCode() == 200;
@@ -118,58 +135,85 @@ public abstract class BuildAgentClientBase implements Closeable {
         }
     }
 
-    public void uploadFile(
+    public CompletableFuture<HttpClient.Response> uploadFile(
             ByteBuffer buffer,
-            Path remoteFilePath,
-            CompletableFuture<HttpClient.Response> responseFuture) {
-        Map<String, String> headers = Collections.emptyMap();
-        URI uri;
-        try {
-            uri = new URI(fileUploadUrl.toString() + remoteFilePath.toString());
-        } catch (URISyntaxException e) {
-            responseFuture.completeExceptionally(e);
-            return;
-        }
-        getHttpClient().invoke(
-                uri,
-                "PUT",
-                headers,
-                buffer,
-                responseFuture,
-                retryConfig.getMaxRetries(),
-                retryConfig.getWaitBeforeRetry(),
-                -1L
-        );
+            Path remoteFilePath) {
+        return getUri(fileUploadUrl.toString() + remoteFilePath.toString())
+                .thenCompose(uri -> {
+            Set<Request.Header> headers = Collections.emptySet();//TODO headers
+            return getHttpClient().invoke(
+                    uri,
+                    "PUT",
+                    headers,
+                    buffer,
+                    retryConfig.getMaxRetries(),
+                    retryConfig.getWaitBeforeRetry(),
+                    -1L);
+        });
     }
 
-    public void downloadFile(
-            Path remoteFilePath,
-            CompletableFuture<HttpClient.Response> responseFuture) {
-        downloadFile(remoteFilePath,responseFuture, -1L);
+    public CompletableFuture<HttpClient.Response> downloadFile(
+            Path remoteFilePath) {
+        return downloadFile(remoteFilePath, -1L);
     }
 
-    public void downloadFile(
+    public CompletableFuture<HttpClient.Response> downloadFile(
             Path remoteFilePath,
-            CompletableFuture<HttpClient.Response> responseFuture,
             long maxDownloadSize) {
-        URI uri;
-        try {
-            uri = new URI(fileDownloadUrl + remoteFilePath.toString());
-        } catch (URISyntaxException e) {
-            responseFuture.completeExceptionally(e);
-            return;
-        }
+        return getUri(fileDownloadUrl + remoteFilePath.toString())
+                .thenCompose(uri -> {
+                    Set<Request.Header> headers = Collections.emptySet(); //TODO headers
+                    return getHttpClient().invoke(
+                            uri,
+                            "GET", headers,
+                            ByteBuffer.allocate(0),
+                            retryConfig.getMaxRetries(),
+                            retryConfig.getWaitBeforeRetry(),
+                            maxDownloadSize
+                    );
+                });
+    }
 
-        getHttpClient().invoke(
-                uri,
-                "GET",
-                Collections.emptyMap(),
-                ByteBuffer.allocate(0),
-                responseFuture,
-                retryConfig.getMaxRetries(),
-                retryConfig.getWaitBeforeRetry(),
-                maxDownloadSize
-        );
+    public CompletableFuture<Set<String>> getRunningProcesses() {
+        return getUri(processListUrl.toString())
+                .thenCompose(uri -> {
+                    Set<Request.Header> headers = Collections.emptySet(); //TODO headers
+                    return getHttpClient().invoke(
+                            uri,
+                            "GET",
+                            headers,
+                            ByteBuffer.allocate(0),
+                            retryConfig.getMaxRetries(),
+                            retryConfig.getWaitBeforeRetry(),
+                            -1L
+                    );
+                })
+                .thenApply(response -> {
+                    if (response.getCode() == 200) {
+                        TypeReference<Set<String>> typeRef = new TypeReference<Set<String>>() {};
+                        try {
+                            return objectMapper.readValue(response.getStringResult().getString(), typeRef);
+                        } catch (IOException e) {
+                            throw new CompletionException(
+                                    new BuildAgentClientException(
+                                            "Cannot read running processes response.", e));
+                        }
+                    } else {
+                        throw new CompletionException(
+                                new BuildAgentClientException(
+                                        "Cannot get running processes. Response code: " + response.getCode()));
+                    }
+                });
+    }
+
+    private CompletableFuture<URI> getUri(String uri) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return new URI(uri);
+            } catch (URISyntaxException e) {
+                throw new CompletionException(e);
+            }
+        });
     }
 
     @Override

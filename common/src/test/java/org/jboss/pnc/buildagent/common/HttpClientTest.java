@@ -8,6 +8,8 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.xnio.IoUtils;
+import org.xnio.OptionMap;
+import org.xnio.Options;
 import org.xnio.Xnio;
 import org.xnio.XnioWorker;
 import org.xnio.channels.StreamSinkChannel;
@@ -29,8 +31,7 @@ public class HttpClientTest {
     public void shouldRetryFailedConnection()
             throws IOException, URISyntaxException, ExecutionException, InterruptedException {
         HttpClient httpClient = new HttpClient();
-        CompletableFuture<HttpClient.Response> completableFuture = new CompletableFuture<>();
-        httpClient.invoke(new URI("http://host-not-found/"), "GET", "", completableFuture);
+        CompletableFuture<HttpClient.Response> completableFuture = httpClient.invoke(new URI("http://host-not-found/"), "GET", "");
         completableFuture.get();
     }
 
@@ -58,12 +59,10 @@ public class HttpClientTest {
             DefaultByteBufferPool buffer = new DefaultByteBufferPool(false, 1024, 10, 10, 100);
 
             httpClient = new HttpClient(xnioWorker, buffer);
-            CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
-            httpClient.invoke(new URI("http://localhost:8080/"),
+            CompletableFuture<HttpClient.Response> responseFuture = httpClient.invoke(new URI("http://localhost:8080/"),
                     "GET",
-                    Collections.emptyMap(),
+                    Collections.emptySet(),
                     ByteBuffer.allocate(0),
-                    responseFuture,
                     0,
                     0,
                     1024);
@@ -72,6 +71,62 @@ public class HttpClientTest {
             Assert.assertTrue("Download limit exceeded." ,response.getStringResult().getString().length() < 2 * 1024); //limit + buffer size
         } finally {
             undertow.stop();
+            IoUtils.safeClose(httpClient);
+        }
+    }
+
+    Undertow server;
+
+    @Test @Ignore //TODO set up timeouts
+    public void shouldFailWhenRemoteServerDoesNotRespond()
+            throws IOException, URISyntaxException, ExecutionException, InterruptedException {
+
+        HttpHandler handler = exchange -> {
+            StreamSinkChannel responseChannel = exchange.getResponseChannel();
+            Thread.sleep(1000L);
+            System.out.println("Stopping ...");
+            server.stop();
+            System.out.println("Stopped!");
+            for (int i = 0; i < 5; i++) {
+                System.out.println("Writing ...");
+                responseChannel.write(ByteBuffer.wrap(UUID.randomUUID().toString().getBytes()));
+                Thread.sleep(1000L);
+            }
+            responseChannel.writeFinal(ByteBuffer.wrap(UUID.randomUUID().toString().getBytes()));
+        };
+        Undertow.Builder builder = Undertow.builder().addHttpListener(8080, "localhost").setHandler(handler);
+        server = builder.build();
+        server.start();
+
+        HttpClient httpClient = null;
+        try {
+            final Xnio xnio = Xnio.getInstance();
+
+            OptionMap options = OptionMap.builder()
+                    .set(Options.WORKER_IO_THREADS, 8)
+                    .set(Options.TCP_NODELAY, true)
+                    .set(Options.KEEP_ALIVE, true)
+                    .set(Options.WORKER_NAME, "Build Agent Http Client")
+                    .set(Options.READ_TIMEOUT, 30000)
+                    .set(Options.WRITE_TIMEOUT, 30000)
+                    .getMap();
+
+            XnioWorker xnioWorker = xnio.createWorker(null, options);
+
+            DefaultByteBufferPool buffer = new DefaultByteBufferPool(false, 1024, 10, 10, 100);
+
+            httpClient = new HttpClient(xnioWorker, buffer);
+            CompletableFuture<HttpClient.Response> responseFuture = httpClient.invoke(new URI("http://localhost:8080/"),
+                    "GET",
+                    Collections.emptySet(),
+                    ByteBuffer.allocate(0),
+                    0,
+                    0,
+                    -1L);
+            HttpClient.Response response = responseFuture.get();
+            System.out.println("Done: " + response.getCode() + " - " + response.getStringResult().getString());
+        } finally {
+            server.stop();
             IoUtils.safeClose(httpClient);
         }
     }

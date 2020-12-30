@@ -2,6 +2,8 @@ package org.jboss.pnc.buildagent.api.httpinvoke;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import org.jboss.pnc.api.dto.HeartbeatConfig;
+import org.jboss.pnc.api.dto.Request;
 
 import java.net.URL;
 import java.util.Collections;
@@ -17,7 +19,9 @@ public class InvokeRequest {
     /**
      * Callback request
      */
-    private final Request request;
+    private final Request callback;
+
+    private final HeartbeatConfig heartbeatConfig;
 
     /**
      * @deprecated use {@link InvokeRequest(String, Request )}
@@ -25,17 +29,26 @@ public class InvokeRequest {
     @Deprecated
     public InvokeRequest(String command, URL callbackUrl, String callbackMethod) {
         this.command = command;
-        this.request = new Request(callbackMethod, callbackUrl, Collections.emptyMap());
+        this.callback = new Request(callbackMethod, callbackUrl, Collections.emptySet());
+        heartbeatConfig = null;
     }
 
-    public InvokeRequest(String command, Request request) {
+    public InvokeRequest(String command, Request callback) {
         this.command = command;
-        this.request = request;
+        this.callback = callback;
+        heartbeatConfig = null;
+    }
+
+    public InvokeRequest(String command, Request callback, HeartbeatConfig heartbeatConfig) {
+        this.command = command;
+        this.callback = callback;
+        this.heartbeatConfig = heartbeatConfig;
     }
 
     private InvokeRequest(Builder builder) {
         command = builder.command;
-        request = builder.request;
+        callback = builder.callback;
+        heartbeatConfig = builder.heartbeatConfig;
     }
 
     public static Builder builder() {
@@ -46,8 +59,12 @@ public class InvokeRequest {
         return command;
     }
 
-    public Request getRequest() {
-        return request;
+    public Request getCallback() {
+        return callback;
+    }
+
+    public HeartbeatConfig getHeartbeatConfig() {
+        return heartbeatConfig;
     }
 
     @JsonPOJOBuilder(withPrefix = "")
@@ -55,7 +72,9 @@ public class InvokeRequest {
 
         private String command;
 
-        private Request request;
+        private Request callback;
+
+        private HeartbeatConfig heartbeatConfig;
 
         private Builder() {
         }
@@ -65,8 +84,13 @@ public class InvokeRequest {
             return this;
         }
 
-        public Builder request(Request request) {
-            this.request = request;
+        public Builder callback(Request callback) {
+            this.callback = callback;
+            return this;
+        }
+
+        public Builder heartbeatConfig(HeartbeatConfig heartbeatConfig) {
+            this.heartbeatConfig = heartbeatConfig;
             return this;
         }
 

@@ -28,6 +28,7 @@ import org.xnio.Pool;
 import org.xnio.channels.StreamSourceChannel;
 
 import java.io.IOException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 /**
@@ -75,7 +76,7 @@ public abstract class LimitingStringReadChannelListener implements ChannelListen
                     stringDone(new StringResult(true, string.extract()));
                     IoUtils.safeClose(channel);
                 } else {
-                    buffer.flip();
+                    ((Buffer)buffer).flip();
                     string.write(buffer);
                     read +=r;
                     if (maxDownloadSize > -1L && read >= maxDownloadSize) {

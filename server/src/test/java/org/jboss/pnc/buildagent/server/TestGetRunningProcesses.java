@@ -18,13 +18,12 @@
 
 package org.jboss.pnc.buildagent.server;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.pnc.buildagent.api.Status;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
+import org.jboss.pnc.buildagent.client.BuildAgentClient;
+import org.jboss.pnc.buildagent.client.BuildAgentHttpClient;
 import org.jboss.pnc.buildagent.client.BuildAgentSocketClient;
-import org.jboss.pnc.buildagent.common.ObjectWrapper;
-import org.jboss.pnc.buildagent.common.Wait;
+import org.jboss.pnc.buildagent.client.HttpClientConfiguration;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -32,13 +31,11 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -66,49 +63,29 @@ public class TestGetRunningProcesses {
     public void getRunningProcesses() throws Throwable {
         String terminalUrl = "http://" + HOST + ":" + PORT;
 
-        HttpURLConnection connection = retrieveProcessList();
-        Assert.assertEquals(connection.getResponseMessage(), 200, connection.getResponseCode());
-
-        JsonNode node = readResponse(connection);
-        Assert.assertEquals(0, node.size());
-
         String context = this.getClass().getName() + ".getRunningProcesses";
 
-        ObjectWrapper<Boolean> resultReceived = new ObjectWrapper<>(false);
+        BlockingQueue<Status> runningUpdate = new ArrayBlockingQueue<>(1);
         Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
-            if (statusUpdateEvent.getNewStatus().equals(Status.RUNNING)) {
-                try {
-                    HttpURLConnection afterExecution = retrieveProcessList();
-                    Assert.assertEquals(afterExecution.getResponseMessage(), 200, afterExecution.getResponseCode());
-                    JsonNode nodeAfterExecution = readResponse(afterExecution);
-                    Assert.assertEquals(1, nodeAfterExecution.size());
-                    resultReceived.set(true);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+            Status newStatus = statusUpdateEvent.getNewStatus();
+            if (newStatus.equals(Status.RUNNING)) {
+                runningUpdate.add(newStatus);
             }
         };
 
-        BuildAgentSocketClient buildAgentClient = new BuildAgentSocketClient(terminalUrl, Optional.empty(), onStatusUpdate, context);
-        buildAgentClient.executeCommand(TEST_COMMAND);
+        HttpClientConfiguration configuration = HttpClientConfiguration.newBuilder()
+                .termBaseUrl(terminalUrl)
+                .build();
+        //http client does not create active terminal on connect
+        BuildAgentClient buildAgentHttpClient = new BuildAgentHttpClient(configuration);
+        Assert.assertEquals(0, buildAgentHttpClient.getRunningProcesses().get(3, TimeUnit.SECONDS).size());
+        BuildAgentClient buildAgentClient = new BuildAgentSocketClient(terminalUrl, Optional.empty(), onStatusUpdate, context);
+        Assert.assertEquals(1, buildAgentHttpClient.getRunningProcesses().get(3, TimeUnit.SECONDS).size());
 
-        Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();
-        Wait.forCondition(evaluationSupplier, 10, ChronoUnit.SECONDS, "Client was not connected within given timeout.");
+        buildAgentClient.execute(TEST_COMMAND);
+        runningUpdate.poll(3, TimeUnit.SECONDS);
+        Assert.assertEquals(1, buildAgentHttpClient.getRunningProcesses().get(3, TimeUnit.SECONDS).size());
+
         buildAgentClient.close();
     }
-
-    private JsonNode readResponse(HttpURLConnection connection) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
-        return mapper.readTree(connection.getInputStream());
-    }
-
-    private HttpURLConnection retrieveProcessList() throws IOException {
-        URL url = new URL("http://" + HOST + ":" + PORT + "/processes");
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-        connection.setDoOutput(true);
-        connection.setDoInput(true);
-        return connection;
-    }
-
 }

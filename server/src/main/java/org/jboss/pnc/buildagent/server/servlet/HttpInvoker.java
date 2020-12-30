@@ -4,8 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.Status;
+import org.jboss.pnc.api.dto.HeartbeatConfig;
+import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
-import org.jboss.pnc.buildagent.api.httpinvoke.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.Cancel;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeResponse;
@@ -15,6 +16,7 @@ import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.common.security.Md5;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.server.httpinvoker.CommandSession;
+import org.jboss.pnc.buildagent.server.httpinvoker.Heartbeat;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.termserver.StatusConverter;
 import org.slf4j.Logger;
@@ -25,13 +27,15 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -49,6 +53,7 @@ public class HttpInvoker extends HttpServlet {
     private final HttpClient httpClient;
 
     private final RetryConfig retryConfig;
+    private final Heartbeat heartbeat;
 
     private final Md5 stdoutChecksum;
 
@@ -57,12 +62,14 @@ public class HttpInvoker extends HttpServlet {
             Set<ReadOnlyChannel> readOnlyChannels,
             SessionRegistry sessionRegistry,
             HttpClient httpClient,
-            RetryConfig retryConfig)
+            RetryConfig retryConfig,
+            Heartbeat heartbeat)
             throws NoSuchAlgorithmException {
         this.readOnlyChannels = readOnlyChannels;
         this.sessionRegistry = sessionRegistry;
         this.httpClient = httpClient;
         this.retryConfig = retryConfig;
+        this.heartbeat = heartbeat;
         this.stdoutChecksum = new Md5();
     }
 
@@ -81,9 +88,9 @@ public class HttpInvoker extends HttpServlet {
     }
 
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String requestString = request.getReader().lines().collect(Collectors.joining());
-        logger.info("Received request body; {}.", requestString);
+        logger.info("Received request body: {}.", requestString);
         InvokeRequest invokeRequest = objectMapper.readValue(requestString, InvokeRequest.class);
 
         String command = invokeRequest.getCommand();
@@ -91,10 +98,19 @@ public class HttpInvoker extends HttpServlet {
         CommandSession commandSession = new CommandSession(readOnlyChannels);
         String sessionId = commandSession.getSessionId();
 
+        HeartbeatConfig heartbeatConfig = invokeRequest.getHeartbeatConfig();
+        Optional<Future<?>> heartbeatFuture;
+        if (heartbeatConfig != null) {
+            heartbeatFuture = Optional.of(heartbeat.start(heartbeatConfig));
+        } else {
+            heartbeatFuture = Optional.empty();
+        }
+
         PtyMaster ptyMaster = new PtyMaster(command, stdOut -> handleOutput(commandSession, stdOut), (nul) -> {});
         ptyMaster.setChangeHandler((oldStatus, newStatus) -> {
             if (newStatus.isFinal()) {
-                onComplete(commandSession, newStatus, invokeRequest.getRequest());
+                onComplete(commandSession, newStatus, invokeRequest.getCallback());
+                heartbeatFuture.ifPresent(future -> this.heartbeat.stop(future));
             }
         });
         commandSession.setPtyMaster(ptyMaster);
@@ -115,6 +131,7 @@ public class HttpInvoker extends HttpServlet {
 
     private void onComplete(CommandSession commandSession, Status newStatus, Request callback) {
         TaskStatusUpdateEvent.Builder updateEventBuilder = TaskStatusUpdateEvent.newBuilder();
+        updateEventBuilder.context(callback.getAttachment());
         try {
             String digest = stdoutChecksum.digest();
             commandSession.close();
@@ -130,21 +147,24 @@ public class HttpInvoker extends HttpServlet {
         }
 
         //notify completion via callback
-        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
         try {
             String data = objectMapper.writeValueAsString(updateEventBuilder.build());
             httpClient.invoke(
-                    callback.getUrl().toURI(),
-                    callback.getMethod(),
-                    callback.getHeaders(),
-                    data,
-                    responseFuture,
+                    callback,
+                    ByteBuffer.wrap(data.getBytes(UTF_8)),
                     retryConfig.getMaxRetries(),
-                    retryConfig.getWaitBeforeRetry());
+                    retryConfig.getWaitBeforeRetry(),
+                    -1L)
+            .handle((response, throwable) -> {
+                if (throwable != null) {
+                    logger.error("Cannot send completion callback.", throwable);
+                } else {
+                    logger.info("Completion callback sent. Response code: {}.", response.getCode());
+                }
+                return null;
+            });
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize invoke object.", e);
-        } catch (URISyntaxException e) {
-            logger.error("Invalid callback url.", e);
         }
     }
 }

@@ -44,6 +44,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -160,33 +161,63 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
 
     @Override
     public void execute(Object command, long executeTimeout, TimeUnit unit) throws BuildAgentClientException {
-        log.info("Executing remote command [{}]...", command);
-        javax.websocket.RemoteEndpoint.Async remoteEndpoint = commandExecutingEndpoint.getRemoteEndpoint();
-
-        remoteEndpoint.setSendTimeout(TimeUnit.MILLISECONDS.convert(executeTimeout, unit));
-        ByteBuffer byteBuffer = prepareRemoteCommand(command);
-
         try {
-            log.debug("Sending remote command...");
-            CompletableFuture<SendResult> resultFuture = new CompletableFuture<>();
-            SendHandler resultHandler = result -> {
-                if (result.isOK()) {
-                    resultFuture.complete(result);
-                } else {
-                    resultFuture.completeExceptionally(
-                            new BuildAgentClientException("Remote command execution failed.", result.getException()));
-                }
-            };
-            remoteEndpoint.sendBinary(byteBuffer, resultHandler);
+            CompletableFuture<SendResult> resultFuture = executeAsync(command, executeTimeout, unit);
             resultFuture.get(executeTimeout, unit);
-            log.debug("Command sent.");
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Cannot execute remote command.", e);
         }
     }
 
+    @Override
+    public CompletableFuture<String> executeAsync(Object command) {
+        return executeAsync(command, -1L, null)
+            .thenApply(r -> {
+                if (!r.isOK()) {
+                    throw new CompletionException("Websocket result is not OK.", r.getException());
+                } else {
+                    return null;
+                }
+            });
+    }
+
+    private CompletableFuture<SendResult> executeAsync(Object command, long sendTimeout, TimeUnit unit) {
+        log.info("Executing remote command [{}]...", command);
+        CompletableFuture<SendResult> result = new CompletableFuture<>();
+        javax.websocket.RemoteEndpoint.Async remoteEndpoint = commandExecutingEndpoint.getRemoteEndpoint();
+        if (sendTimeout > -1) {
+            remoteEndpoint.setSendTimeout(TimeUnit.MILLISECONDS.convert(sendTimeout, unit));
+        }
+        ByteBuffer byteBuffer;
+        try {
+            byteBuffer = prepareRemoteCommand(command);
+        } catch (BuildAgentClientException e) {
+            result.completeExceptionally(e);
+            return result;
+        }
+
+        SendHandler resultHandler = r -> {
+            if (r.isOK()) {
+                log.debug("Command sent.");
+                result.complete(r);
+            } else {
+                result.completeExceptionally(
+                        new BuildAgentClientException("Remote command execution failed.", r.getException()));
+            }
+        };
+        log.debug("Sending remote command...");
+        remoteEndpoint.sendBinary(byteBuffer, resultHandler);
+        return result;
+    }
+
     public void cancel() throws BuildAgentClientException {
         execute('C' - 64); //send ctrl+C
+    }
+
+    @Override
+    public CompletableFuture<HttpClient.Response> cancel(String sessionId) {
+        return executeAsync('C' - 64)//send ctrl+C
+                .thenApply(s ->  new HttpClient.Response(204, null));
     }
 
     @Override
