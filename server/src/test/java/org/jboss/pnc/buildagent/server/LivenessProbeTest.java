@@ -17,7 +17,7 @@ public class LivenessProbeTest {
         int port = TermdServer.getNextPort();
         String terminalBaseUrl = "http://" + HOST + ":" + port;
 
-        BuildAgentHttpClient client = new BuildAgentHttpClient(terminalBaseUrl, null, null);
+        BuildAgentHttpClient client = new BuildAgentHttpClient(terminalBaseUrl, null, "GET");
         Assert.assertFalse(client.isServerAlive());
 
         TermdServer.startServer(HOST, port, "", true, true);

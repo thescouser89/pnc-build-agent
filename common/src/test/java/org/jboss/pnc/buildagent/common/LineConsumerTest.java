@@ -29,7 +29,7 @@ public class LineConsumerTest {
         int size = 10;
         List<byte[]> inputs = slicedBytes(input, size);
 
-        ArrayBlockingQueue<String> results = new ArrayBlockingQueue(10);
+        ArrayBlockingQueue<String> results = new ArrayBlockingQueue<>(10);
 
         Consumer<String> onLine = (line) -> {
             results.add(line);

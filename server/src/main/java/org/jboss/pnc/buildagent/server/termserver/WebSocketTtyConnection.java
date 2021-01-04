@@ -26,7 +26,7 @@ import io.undertow.websockets.core.BufferedBinaryMessage;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.api.ResponseMode;
-import org.jboss.pnc.buildagent.server.BuildAgentException;
+import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.ChannelListener;

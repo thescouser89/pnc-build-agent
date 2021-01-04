@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
@@ -32,7 +34,7 @@ import java.util.concurrent.TimeoutException;
 public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildAgentClient {
     private final Logger logger = LoggerFactory.getLogger(BuildAgentHttpClient.class);
 
-    private final URI invokerUrl;
+    private final URI invokerUri;
 
     private final Request callback;
 
@@ -54,7 +56,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         );
         this.heartbeatConfig = Optional.empty();
         try {
-            invokerUrl = new URI(termBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
+            invokerUri = new URI(termBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (URISyntaxException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
@@ -67,7 +69,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         this.heartbeatConfig = configuration.getHeartbeatConfig();
         try {
             String agentBaseUrl = StringUtils.stripEndingSlash(configuration.getTermBaseUrl());
-            invokerUrl = new URI(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
+            invokerUri = new URI(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (URISyntaxException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
@@ -88,7 +90,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         this.heartbeatConfig = configuration.getHeartbeatConfig();
         try {
             String agentBaseUrl = StringUtils.stripEndingSlash(configuration.getTermBaseUrl());
-            invokerUrl = new URI(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
+            invokerUri = new URI(agentBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
         } catch (URISyntaxException e) {
             throw new BuildAgentClientException("Invalid term url.", e);
         }
@@ -148,12 +150,13 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
                 .thenCompose(requestJson -> {
             Set<Request.Header> headers = Collections.emptySet();
             return getHttpClient().invoke(
-                    invokerUrl,
-                    "POST",
-                    headers,
-                    requestJson,
+                    new Request(Request.Method.POST, invokerUri, headers),
+                    ByteBuffer.wrap(requestJson.getBytes(StandardCharsets.UTF_8)),
                     retryConfig.getMaxRetries(),
-                    retryConfig.getWaitBeforeRetry()
+                    retryConfig.getWaitBeforeRetry(),
+                    1L,
+                    0,
+                    0
             );
         });
     }
@@ -179,16 +182,14 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     @Override
     public CompletableFuture<HttpClient.Response> cancel(String sessionId) {
         return asJson(new Cancel(sessionId))
-                .thenCompose(requestJson -> {
-                    return getHttpClient().invoke(
-                            invokerUrl,
-                            "PUT",
-                            Collections.emptySet(),
-                            requestJson,
-                            retryConfig.getMaxRetries(),
-                            retryConfig.getWaitBeforeRetry());
-
-                });
+                .thenCompose(requestJson -> getHttpClient().invoke(
+                        new Request(Request.Method.PUT, invokerUri),
+                        ByteBuffer.wrap(requestJson.getBytes(StandardCharsets.UTF_8)),
+                        retryConfig.getMaxRetries(),
+                        retryConfig.getWaitBeforeRetry(),
+                        -1L,
+                        0,
+                        0));
     }
 
     private CompletableFuture<String> asJson(Object request) {

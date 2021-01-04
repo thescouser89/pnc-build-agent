@@ -30,6 +30,7 @@ import io.undertow.servlet.api.DeploymentManager;
 import org.jboss.pnc.buildagent.api.Constants;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
+import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.server.httpinvoker.Heartbeat;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
@@ -235,7 +236,7 @@ public class BootstrapUndertow {
     }
 
     public Map<String, Term> getTerms() {
-        Map termsClone = new HashMap<>();
+        Map<String, Term> termsClone = new HashMap<>();
         termsClone.putAll(terms);
         return termsClone;
     }

@@ -25,6 +25,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.jboss.pnc.api.dto.Request.Method.GET;
+import static org.jboss.pnc.api.dto.Request.Method.HEAD;
+import static org.jboss.pnc.api.dto.Request.Method.PUT;
 import static org.jboss.pnc.buildagent.api.Constants.FILE_DOWNLOAD_PATH;
 import static org.jboss.pnc.buildagent.api.Constants.FILE_UPLOAD_PATH;
 import static org.jboss.pnc.buildagent.api.Constants.RUNNING_PROCESSES;
@@ -115,7 +118,8 @@ public abstract class BuildAgentClientBase implements Closeable {
     }
 
     public boolean isServerAlive() {
-        CompletableFuture<HttpClient.Response> responseFuture = getHttpClient().invoke(livenessProbeLocation, "HEAD", "");
+        CompletableFuture<HttpClient.Response> responseFuture = getHttpClient().invoke(
+                new Request(HEAD, livenessProbeLocation), "");
         try {
             HttpClient.Response response = responseFuture.get(livenessResponseTimeout, TimeUnit.MILLISECONDS);
             boolean isSuccess = response.getCode() == 200;
@@ -142,13 +146,13 @@ public abstract class BuildAgentClientBase implements Closeable {
                 .thenCompose(uri -> {
             Set<Request.Header> headers = Collections.emptySet();//TODO headers
             return getHttpClient().invoke(
-                    uri,
-                    "PUT",
-                    headers,
+                    new Request(PUT, uri, headers),
                     buffer,
                     retryConfig.getMaxRetries(),
                     retryConfig.getWaitBeforeRetry(),
-                    -1L);
+                    -1L,
+                    0,
+                    0);
         });
     }
 
@@ -164,12 +168,13 @@ public abstract class BuildAgentClientBase implements Closeable {
                 .thenCompose(uri -> {
                     Set<Request.Header> headers = Collections.emptySet(); //TODO headers
                     return getHttpClient().invoke(
-                            uri,
-                            "GET", headers,
+                            new Request(GET, uri, headers),
                             ByteBuffer.allocate(0),
                             retryConfig.getMaxRetries(),
                             retryConfig.getWaitBeforeRetry(),
-                            maxDownloadSize
+                            maxDownloadSize,
+                            0,
+                            0
                     );
                 });
     }
@@ -179,13 +184,13 @@ public abstract class BuildAgentClientBase implements Closeable {
                 .thenCompose(uri -> {
                     Set<Request.Header> headers = Collections.emptySet(); //TODO headers
                     return getHttpClient().invoke(
-                            uri,
-                            "GET",
-                            headers,
+                            new Request(GET, uri, headers),
                             ByteBuffer.allocate(0),
                             retryConfig.getMaxRetries(),
                             retryConfig.getWaitBeforeRetry(),
-                            -1L
+                            -1L,
+                            0,
+                            0
                     );
                 })
                 .thenApply(response -> {

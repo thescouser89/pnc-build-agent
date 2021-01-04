@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.server.termserver.Term;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -154,7 +154,9 @@ public class HttpInvoker extends HttpServlet {
                     ByteBuffer.wrap(data.getBytes(UTF_8)),
                     retryConfig.getMaxRetries(),
                     retryConfig.getWaitBeforeRetry(),
-                    -1L)
+                    -1L,
+                    0,
+                    0)
             .handle((response, throwable) -> {
                 if (throwable != null) {
                     logger.error("Cannot send completion callback.", throwable);

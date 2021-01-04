@@ -19,6 +19,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletException;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.HashSet;
@@ -74,18 +76,19 @@ public class TestCommandExecution {
 
     @Test
     public void shouldExecuteRemoteCommand()
-            throws IOException, BuildAgentClientException, InterruptedException, ExecutionException, TimeoutException {
+            throws IOException, BuildAgentClientException, InterruptedException, ExecutionException, TimeoutException,
+            URISyntaxException {
         CompletableFuture<String> callbackFuture = new CompletableFuture<>();
         Consumer<String> onResult = (s) -> callbackFuture.complete(s);
         responseConsumers.add(onResult);
 
-        URL callbackUrl = new URL("http://" + HOST +":" + LOCAL_PORT+"/" + CallbackHandler.class.getSimpleName());
+        URI callbackUrl = new URI("http://" + HOST +":" + LOCAL_PORT+"/" + CallbackHandler.class.getSimpleName());
         HeartbeatConfig heartbeatConfig = new HeartbeatConfig(
-                new Request("GET", new URL("http://" + HOST +":" + LOCAL_PORT+"/" + HeartbeatHandler.class.getSimpleName())),
+                new Request(Request.Method.GET, new URI("http://" + HOST +":" + LOCAL_PORT+"/" + HeartbeatHandler.class.getSimpleName())),
                 50L,
                 TimeUnit.MILLISECONDS);
         HttpClientConfiguration clientConfiguration = HttpClientConfiguration.newBuilder()
-                .callback(new Request("PUT", callbackUrl, Collections.emptySet(), null))
+                .callback(new Request(Request.Method.PUT, callbackUrl, Collections.emptySet(), null))
                 .termBaseUrl(terminalBaseUrl)
                 .heartbeatConfig(Optional.of(heartbeatConfig))
                 .build();

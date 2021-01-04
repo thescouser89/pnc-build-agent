@@ -37,7 +37,7 @@ public class Heartbeat {
     }
 
     private void sendHeartbeat(Request heartbeatRequest) {
-        httpClient.invoke(heartbeatRequest, ByteBuffer.allocate(0), 0, 0L, -1L)
+        httpClient.invoke(heartbeatRequest, ByteBuffer.allocate(0), 0, 0L, -1L, 0, 0)
             .handle((response, throwable) -> {
                 if (throwable != null) {
                     logger.error("Cannot send heartbeat.", throwable);
