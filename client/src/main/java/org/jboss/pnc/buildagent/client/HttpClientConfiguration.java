@@ -1,7 +1,10 @@
 package org.jboss.pnc.buildagent.client;
 
-import org.jboss.pnc.buildagent.api.httpinvoke.Request;
+import org.jboss.pnc.api.dto.HeartbeatConfig;
+import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
+
+import java.util.Optional;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
@@ -9,12 +12,14 @@ import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 public class HttpClientConfiguration extends ClientConfigurationBase {
 
     private Request callback;
+    private Optional<HeartbeatConfig> heartbeatConfig;
 
     private HttpClientConfiguration(Builder builder) {
         termBaseUrl = builder.termBaseUrl;
         livenessResponseTimeout = builder.livenessResponseTimeout;
         callback = builder.callback;
         retryConfig = builder.retryConfig;
+        heartbeatConfig = builder.heartbeatConfig;
     }
 
     public static Builder newBuilder() {
@@ -27,6 +32,7 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
         builder.livenessResponseTimeout = copy.getLivenessResponseTimeout();
         builder.callback = copy.getCallback();
         builder.retryConfig = copy.getRetryConfig();
+        builder.heartbeatConfig = copy.getHeartbeatConfig();
         return builder;
     }
 
@@ -34,10 +40,15 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
         return callback;
     }
 
+    public Optional<HeartbeatConfig> getHeartbeatConfig() {
+        return heartbeatConfig;
+    }
+
     public static final class Builder {
         private String termBaseUrl;
         private Long livenessResponseTimeout = 30000L;
         private Request callback;
+        public Optional<HeartbeatConfig> heartbeatConfig = Optional.empty();
         private RetryConfig retryConfig = new RetryConfig(10, 500L);
 
         private Builder() {
@@ -55,6 +66,11 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
 
         public Builder callback(Request callback) {
             this.callback = callback;
+            return this;
+        }
+
+        public Builder heartbeatConfig(Optional<HeartbeatConfig> heartbeatConfig) {
+            this.heartbeatConfig = heartbeatConfig;
             return this;
         }
 

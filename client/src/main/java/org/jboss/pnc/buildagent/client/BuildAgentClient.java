@@ -1,11 +1,11 @@
 package org.jboss.pnc.buildagent.client;
 
-import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -16,19 +16,11 @@ public interface BuildAgentClient extends Closeable {
 
     void execute(Object command) throws BuildAgentClientException;
 
-    void uploadFile(
-            ByteBuffer buffer,
-            Path remoteFilePath,
-            CompletableFuture<HttpClient.Response> responseFuture);
+    CompletableFuture<HttpClient.Response> uploadFile(ByteBuffer buffer, Path remoteFilePath);
 
-    void downloadFile(
-            Path remoteFilePath,
-            CompletableFuture<HttpClient.Response> responseFuture);
+    CompletableFuture<HttpClient.Response> downloadFile(Path remoteFilePath);
 
-    void downloadFile(
-            Path remoteFilePath,
-            CompletableFuture<HttpClient.Response> responseFuture,
-            long maxDownloadSize);
+    CompletableFuture<HttpClient.Response> downloadFile(Path remoteFilePath, long maxDownloadSize);
 
     /**
      *
@@ -39,9 +31,15 @@ public interface BuildAgentClient extends Closeable {
      */
     void execute(Object command, long executeTimeout, TimeUnit unit) throws BuildAgentClientException;
 
+    CompletableFuture<String> executeAsync(Object command);
+
     void cancel() throws BuildAgentClientException;
 
+    CompletableFuture<HttpClient.Response> cancel(String sessionId);
+
     String getSessionId();
+
+    CompletableFuture<Set<String>> getRunningProcesses();
 
     boolean isServerAlive();
 }

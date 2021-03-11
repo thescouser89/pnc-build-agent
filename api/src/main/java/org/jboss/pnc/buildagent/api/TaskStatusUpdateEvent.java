@@ -39,11 +39,10 @@ public class TaskStatusUpdateEvent implements Serializable {
   private final Status newStatus;
   private final String outputChecksum;
   private final String message;
+  private final Object context;
 
   @Deprecated
   private final Status oldStatus;
-  @Deprecated
-  private final String context;
 
   @Deprecated
   public TaskStatusUpdateEvent(String taskId, Status oldStatus, Status newStatus, String context, String outputChecksum) {
@@ -102,8 +101,7 @@ public class TaskStatusUpdateEvent implements Serializable {
     return newStatus;
   }
 
-  @Deprecated
-  public String getContext() {
+  public Object getContext() {
     return context;
   }
 
@@ -138,7 +136,7 @@ public class TaskStatusUpdateEvent implements Serializable {
 
     private Status oldStatus;
 
-    private String context;
+    private Object context;
 
     private Builder() {
     }
@@ -163,15 +161,14 @@ public class TaskStatusUpdateEvent implements Serializable {
       return this;
     }
 
-    @Deprecated
-    public Builder oldStatus(Status oldStatus) {
-      this.oldStatus = oldStatus;
+    public Builder context(Object context) {
+      this.context = context;
       return this;
     }
 
     @Deprecated
-    public Builder context(String context) {
-      this.context = context;
+    public Builder oldStatus(Status oldStatus) {
+      this.oldStatus = oldStatus;
       return this;
     }
 

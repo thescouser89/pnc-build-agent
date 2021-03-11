@@ -26,9 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -54,11 +51,9 @@ public class FileUploadAbstract {
                 .termBaseUrl("http://" + host + ":" + port + contextPath)
                 .build();
         BuildAgentHttpClient buildAgentHttpClient = new BuildAgentHttpClient(configuration);
-        CompletableFuture<HttpClient.Response> responseFuture = new CompletableFuture<>();
-        buildAgentHttpClient.uploadFile(
+        CompletableFuture<HttpClient.Response> responseFuture = buildAgentHttpClient.uploadFile(
                 ByteBuffer.wrap(fileContent.getBytes(StandardCharsets.UTF_8)),
-                fileUploadPath,
-                responseFuture
+                fileUploadPath
                 );
 
         HttpClient.Response response = responseFuture.get(10, TimeUnit.SECONDS);

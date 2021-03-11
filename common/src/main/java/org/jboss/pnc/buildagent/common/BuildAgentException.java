@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.jboss.pnc.buildagent.server;
+package org.jboss.pnc.buildagent.common;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>

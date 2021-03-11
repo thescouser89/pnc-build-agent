@@ -23,6 +23,7 @@ package org.jboss.pnc.buildagent.api;
  */
 public class Constants {
     public static final String HTTP_PATH = "/";
+    public static final String RUNNING_PROCESSES = "/processes";
     public static final String SOCKET_PATH = "/socket";
     public static final String SERVLET_PATH = "/servlet";
     public static final String TERM_PATH = "/term";

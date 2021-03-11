@@ -9,6 +9,8 @@ import io.undertow.connector.ByteBufferPool;
 import io.undertow.server.DefaultByteBufferPool;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
+import org.jboss.pnc.api.dto.Request;
+import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.common.concurrent.MDCScheduledThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,14 +18,15 @@ import org.xnio.OptionMap;
 import org.xnio.Options;
 import org.xnio.Xnio;
 import org.xnio.XnioWorker;
+import org.xnio.channels.StreamSinkChannel;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -72,50 +75,36 @@ public class HttpClient implements Closeable {
         this.buffer = buffer;
     }
 
-    public void invoke(URI uri, String requestMethod, String data, CompletableFuture<Response> responseFuture) {
-        logger.debug("Making {} request to the endpoint {}; request data: {}.", requestMethod, uri.toString(), data);
-        invokeAttempt(uri, requestMethod, Collections.emptyMap(), ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, 0, 0L, -1L);
+    public CompletableFuture<Response> invoke(Request request, String data) {
+        logger.debug("Making {} request to the endpoint {}; request data: {}.", request.getMethod(), request.getUri(), data);
+        return invoke(request, ByteBuffer.wrap(data.getBytes(UTF_8)), 0, 0L, -1L, 0, 0);
     }
 
-    public void invoke(
-            URI uri,
-            String requestMethod,
-            Map<String, String> requestHeaders,
-            String data,
-            CompletableFuture<Response> responseFuture,
-            int maxRetries,
-            long waitBeforeRetry) {
-        logger.info("Making request {} {}; Headers: {} request data: {}.",
-                requestMethod, uri.toString(), requestHeaders, data);
-        invokeAttempt(uri, requestMethod, requestHeaders, ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, maxRetries, waitBeforeRetry, -1L);
-    }
-
-    public void invoke(
-            URI uri,
-            String requestMethod,
-            Map<String, String> requestHeaders,
-            String data,
-            CompletableFuture<Response> responseFuture,
-            int maxRetries,
-            long waitBeforeRetry,
-            long maxDownloadSize) {
-        logger.info("Making request {} {}; Headers: {} request data: {}.",
-                requestMethod, uri.toString(), requestHeaders, data);
-        invokeAttempt(uri, requestMethod, requestHeaders, ByteBuffer.wrap(data.getBytes(UTF_8)), responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize);
-    }
-
-    public void invoke(
-            URI uri,
-            String requestMethod,
-            Map<String, String> requestHeaders,
+    /**
+     *
+     * @param request
+     * @param data
+     * @param maxRetries
+     * @param waitBeforeRetry milliseconds
+     * @param maxDownloadSize bytes, -1 disabled
+     * @param readTimeout milliseconds between read bytes, 0 for disabled
+     * @param writeTimeout milliseconds between written bytes, 0 for disabled
+     * @return
+     */
+    public CompletableFuture<Response> invoke(
+            Request request,
             ByteBuffer data,
-            CompletableFuture<Response> responseFuture,
             int maxRetries,
             long waitBeforeRetry,
-            long maxDownloadSize) {
+            long maxDownloadSize,
+            int readTimeout,
+            int writeTimeout) {
         logger.info("Making request {} {}; Headers: {} request data: {}.",
-                requestMethod, uri.toString(), requestHeaders, data);
-        invokeAttempt(uri, requestMethod, requestHeaders, data, responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize);
+                request.getMethod(), request.getUri(), request.getHeaders(), data);
+
+        CompletableFuture<Response> responseFuture = new CompletableFuture<>();
+        invokeAttempt(request.getUri(), request.getMethod(), request.getHeaders(), data, responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize, readTimeout, writeTimeout);
+        return responseFuture;
     }
 
     /**
@@ -131,14 +120,16 @@ public class HttpClient implements Closeable {
      */
     private void invokeAttempt(
             URI uri,
-            String requestMethod,
-            Map<String, String> requestHeaders,
+            Request.Method requestMethod,
+            Set<Request.Header> requestHeaders,
             ByteBuffer data,
             CompletableFuture<Response> responseFuture,
             int attempt,
             int maxRetries,
             long waitBeforeRetry,
-            long maxDownloadSize) {
+            long maxDownloadSize,
+            int readTimeout,
+            int writeTimeout) {
         if (attempt > 0) {
             logger.warn(
                     "Retrying ({}) {} request to the endpoint {}; request data: {}.",
@@ -208,22 +199,35 @@ public class HttpClient implements Closeable {
             }
         ).thenCompose(connection -> {
                 ClientRequest request = new ClientRequest();
-                request.setMethod(HttpString.tryFromString(requestMethod));
+                request.setMethod(HttpString.tryFromString(requestMethod.name()));
                 request.setPath(uri.getPath());
                 request.getRequestHeaders().put(Headers.HOST, uri.getHost());
                 request.getRequestHeaders().put(Headers.TRANSFER_ENCODING, "chunked");
-                requestHeaders.forEach((k,v) -> request.getRequestHeaders().put(new HttpString(k), v));
+                requestHeaders.forEach((header) -> request.getRequestHeaders()
+                        .put(new HttpString(header.getName()), header.getValue()));
                 connection.sendRequest(request, onRequestStart);
                 return onRequestStartFuture;
             }
         ).thenCompose(exchange -> {
-            new ByteBufferWriteChannelListener(data).setup(exchange.getRequestChannel());
+            StreamSinkChannel requestChannel = exchange.getRequestChannel();
+            try {
+                if (readTimeout > 0) {
+                    requestChannel.setOption(Options.READ_TIMEOUT, readTimeout);
+                }
+                if (writeTimeout > 0) {
+                    requestChannel.setOption(Options.WRITE_TIMEOUT, writeTimeout);
+                }
+            } catch (IOException e) {
+                throw new CompletionException(new BuildAgentException("Cannot set request timeout.", e));
+            }
+            new ByteBufferWriteChannelListener(data).setup(requestChannel);
             exchange.setResponseListener(onResponseStarted);
                 return onResponseStartedFuture;
             }
         ).thenCompose(exchange -> {
                 response.code = exchange.getResponse().getResponseCode();
-                if (response.getCode() == 503) { //retry if 503 Service Unavailable
+                //retry if 503 Service Unavailable or 504 Gateway Timeout
+                if (response.getCode() == 503 || response.getCode() == 504) {
                     onResponseCompletedFuture.completeExceptionally(
                             new RuntimeException("Received response code: " + response.getCode()));
                 } else {
@@ -245,7 +249,9 @@ public class HttpClient implements Closeable {
                                     attempt + 1,
                                     maxRetries,
                                     waitBeforeRetry,
-                                    maxDownloadSize),
+                                    maxDownloadSize,
+                                    readTimeout,
+                                    writeTimeout),
                             waitBeforeRetry * attempt, TimeUnit.MILLISECONDS
                     );
                 } else {

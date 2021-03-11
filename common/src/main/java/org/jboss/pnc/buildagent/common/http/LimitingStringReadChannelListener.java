@@ -22,12 +22,15 @@ import io.undertow.connector.ByteBufferPool;
 import io.undertow.connector.PooledByteBuffer;
 import io.undertow.server.XnioByteBufferPool;
 import io.undertow.websockets.core.UTF8Output;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.xnio.ChannelListener;
 import org.xnio.IoUtils;
 import org.xnio.Pool;
 import org.xnio.channels.StreamSourceChannel;
 
 import java.io.IOException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 /**
@@ -36,6 +39,8 @@ import java.nio.ByteBuffer;
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 public abstract class LimitingStringReadChannelListener implements ChannelListener<StreamSourceChannel> {
+
+    private final static Logger logger = LoggerFactory.getLogger(LimitingStringReadChannelListener.class);
 
     private final UTF8Output string = new UTF8Output();
     private final ByteBufferPool bufferPool;
@@ -75,13 +80,24 @@ public abstract class LimitingStringReadChannelListener implements ChannelListen
                     stringDone(new StringResult(true, string.extract()));
                     IoUtils.safeClose(channel);
                 } else {
-                    buffer.flip();
+                    ((Buffer)buffer).flip();
                     string.write(buffer);
                     read +=r;
-                    if (maxDownloadSize > -1L && read >= maxDownloadSize) {
-                        stringDone(new StringResult(readCompleted(channel), string.extract()));
-                        IoUtils.safeClose(channel);
-                        break;
+                    if (maxDownloadSize > -1L) {
+                        if (read > maxDownloadSize) {
+                            stringDone(new StringResult(false, string.extract()));
+                            IoUtils.safeClose(channel);
+                            break;
+                        } else if (read == maxDownloadSize) {
+                            int readByte = channel.read(ByteBuffer.allocate(1));
+                            if (readByte > -1) {
+                                stringDone(new StringResult(false, string.extract()));
+                            } else {
+                                stringDone(new StringResult(true, string.extract()));
+                            }
+                            IoUtils.safeClose(channel);
+                            break;
+                        }
                     }
                 }
             } while (r > 0);
@@ -89,6 +105,7 @@ public abstract class LimitingStringReadChannelListener implements ChannelListen
             error(e);
         } finally {
             resource.close();
+            logger.trace("Resource closed in setup.");
         }
     }
 
@@ -106,13 +123,24 @@ public abstract class LimitingStringReadChannelListener implements ChannelListen
                     stringDone(new StringResult(true, string.extract()));
                     IoUtils.safeClose(channel);
                 } else {
-                    buffer.flip();
+                    ((Buffer)buffer).flip();
                     string.write(buffer);
                     read +=r;
-                    if (maxDownloadSize > -1L && read >= maxDownloadSize) {
-                        stringDone(new StringResult(readCompleted(channel), string.extract()));
-                        IoUtils.safeClose(channel);
-                        break;
+                    if (maxDownloadSize > -1L) {
+                        if (read > maxDownloadSize) {
+                            stringDone(new StringResult(false, string.extract()));
+                            IoUtils.safeClose(channel);
+                            break;
+                        } else if (read == maxDownloadSize) {
+                            int readByte = channel.read(ByteBuffer.allocate(1));
+                            if (readByte > -1) {
+                                stringDone(new StringResult(false, string.extract()));
+                            } else {
+                                stringDone(new StringResult(true, string.extract()));
+                            }
+                            IoUtils.safeClose(channel);
+                            break;
+                        }
                     }
                 }
             } while (r > 0);
@@ -120,15 +148,8 @@ public abstract class LimitingStringReadChannelListener implements ChannelListen
             error(e);
         } finally {
             resource.close();
+            logger.trace("Resource closed in handleEvent.");
         }
-    }
-
-    /**
-     * Use only when no further reads from the channel are performed as one byte is lost because of the checking.
-     * @return true if there are no more bytes to read.
-     */
-    private boolean readCompleted(StreamSourceChannel channel) throws IOException {
-        return channel.read(ByteBuffer.allocate(1)) == -1;
     }
 
     protected abstract void stringDone(StringResult stringResult);
