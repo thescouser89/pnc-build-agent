@@ -88,7 +88,7 @@ public class TestCommandExecution {
                 50L,
                 TimeUnit.MILLISECONDS);
         HttpClientConfiguration clientConfiguration = HttpClientConfiguration.newBuilder()
-                .callback(new Request(Request.Method.PUT, callbackUrl, Collections.emptySet(), null))
+                .callback(new Request(Request.Method.PUT, callbackUrl, Collections.emptyList(), null))
                 .termBaseUrl(terminalBaseUrl)
                 .heartbeatConfig(Optional.of(heartbeatConfig))
                 .build();

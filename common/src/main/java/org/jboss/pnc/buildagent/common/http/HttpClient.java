@@ -24,7 +24,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
-import java.util.Set;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -121,7 +121,7 @@ public class HttpClient implements Closeable {
     private void invokeAttempt(
             URI uri,
             Request.Method requestMethod,
-            Set<Request.Header> requestHeaders,
+            List<Request.Header> requestHeaders,
             ByteBuffer data,
             CompletableFuture<Response> responseFuture,
             int attempt,

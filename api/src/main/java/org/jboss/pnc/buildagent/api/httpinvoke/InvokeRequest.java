@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import org.jboss.pnc.api.dto.HeartbeatConfig;
 import org.jboss.pnc.api.dto.Request;
 
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Collections;
 
@@ -29,8 +30,12 @@ public class InvokeRequest {
     @Deprecated
     public InvokeRequest(String command, URL callbackUrl, String callbackMethod) {
         this.command = command;
-        this.callback = new Request(callbackMethod, callbackUrl, Collections.emptySet());
         heartbeatConfig = null;
+        try {
+            this.callback = new Request(Request.Method.valueOf(callbackMethod), callbackUrl.toURI(), Collections.emptyList());
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public InvokeRequest(String command, Request callback) {

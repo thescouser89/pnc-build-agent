@@ -1,7 +1,9 @@
 package org.jboss.pnc.buildagent.server;
 
+import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.client.BuildAgentClientException;
 import org.jboss.pnc.buildagent.client.BuildAgentHttpClient;
+import org.jboss.pnc.buildagent.client.HttpClientConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -17,7 +19,11 @@ public class LivenessProbeTest {
         int port = TermdServer.getNextPort();
         String terminalBaseUrl = "http://" + HOST + ":" + port;
 
-        BuildAgentHttpClient client = new BuildAgentHttpClient(terminalBaseUrl, null, "GET");
+        HttpClientConfiguration configuration = HttpClientConfiguration.newBuilder()
+                .termBaseUrl(terminalBaseUrl)
+                .callback(new Request(Request.Method.GET, null))
+                .build();
+        BuildAgentHttpClient client = new BuildAgentHttpClient(configuration);
         Assert.assertFalse(client.isServerAlive());
 
         TermdServer.startServer(HOST, port, "", true, true);
