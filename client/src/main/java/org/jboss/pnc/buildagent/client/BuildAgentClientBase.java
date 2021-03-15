@@ -17,6 +17,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -144,7 +145,7 @@ public abstract class BuildAgentClientBase implements Closeable {
             Path remoteFilePath) {
         return getUri(fileUploadUrl.toString() + remoteFilePath.toString())
                 .thenCompose(uri -> {
-            Set<Request.Header> headers = Collections.emptySet();//TODO headers
+            List<Request.Header> headers = Collections.emptyList();//TODO headers
             return getHttpClient().invoke(
                     new Request(PUT, uri, headers),
                     buffer,
@@ -166,7 +167,7 @@ public abstract class BuildAgentClientBase implements Closeable {
             long maxDownloadSize) {
         return getUri(fileDownloadUrl + remoteFilePath.toString())
                 .thenCompose(uri -> {
-                    Set<Request.Header> headers = Collections.emptySet(); //TODO headers
+                    List<Request.Header> headers = Collections.emptyList(); //TODO headers
                     return getHttpClient().invoke(
                             new Request(GET, uri, headers),
                             ByteBuffer.allocate(0),
@@ -182,7 +183,7 @@ public abstract class BuildAgentClientBase implements Closeable {
     public CompletableFuture<Set<String>> getRunningProcesses() {
         return getUri(processListUrl.toString())
                 .thenCompose(uri -> {
-                    Set<Request.Header> headers = Collections.emptySet(); //TODO headers
+                    List<Request.Header> headers = Collections.emptyList(); //TODO headers
                     return getHttpClient().invoke(
                             new Request(GET, uri, headers),
                             ByteBuffer.allocate(0),

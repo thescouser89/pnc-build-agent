@@ -20,8 +20,8 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -49,11 +49,15 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     public BuildAgentHttpClient(String termBaseUrl, URL callbackUrl, String callbackMethod)
             throws BuildAgentClientException {
         super(termBaseUrl, 30000, new RetryConfig(10, 500));
-        this.callback = new Request(
-                callbackMethod,
-                callbackUrl,
-                Collections.emptySet()
-        );
+        try {
+            this.callback = new Request(
+                    Request.Method.valueOf(callbackMethod),
+                    callbackUrl.toURI(),
+                    Collections.emptyList()
+            );
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
         this.heartbeatConfig = Optional.empty();
         try {
             invokerUri = new URI(termBaseUrl + Constants.HTTP_INVOKER_FULL_PATH);
@@ -148,7 +152,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
         return asJson(new InvokeRequest(cmd, this.callback, heartbeatConfig.orElse(null)))
                 .thenCompose(requestJson -> {
-            Set<Request.Header> headers = Collections.emptySet();
+            List<Request.Header> headers = Collections.emptyList();
             return getHttpClient().invoke(
                     new Request(Request.Method.POST, invokerUri, headers),
                     ByteBuffer.wrap(requestJson.getBytes(StandardCharsets.UTF_8)),
