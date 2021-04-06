@@ -6,6 +6,7 @@ import io.undertow.client.ClientExchange;
 import io.undertow.client.ClientRequest;
 import io.undertow.client.UndertowClient;
 import io.undertow.connector.ByteBufferPool;
+import io.undertow.protocols.ssl.UndertowXnioSsl;
 import io.undertow.server.DefaultByteBufferPool;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
@@ -20,10 +21,12 @@ import org.xnio.Xnio;
 import org.xnio.XnioWorker;
 import org.xnio.channels.StreamSinkChannel;
 
+import javax.net.ssl.SSLContext;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -42,6 +45,7 @@ public class HttpClient implements Closeable {
     private final XnioWorker xnioWorker;
 
     private final ByteBufferPool buffer;
+    private final UndertowXnioSsl undertowXnioSsl;
 
     public static final OptionMap DEFAULT_OPTIONS;
 
@@ -68,11 +72,23 @@ public class HttpClient implements Closeable {
                 1000,
                 10,
                 100);
+
+        try {
+            undertowXnioSsl = new UndertowXnioSsl(xnioWorker.getXnio(), DEFAULT_OPTIONS, SSLContext.getDefault());
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public HttpClient(XnioWorker xnioWorker, ByteBufferPool buffer) throws IOException {
         this.xnioWorker = xnioWorker;
         this.buffer = buffer;
+
+        try {
+            undertowXnioSsl = new UndertowXnioSsl(xnioWorker.getXnio(), DEFAULT_OPTIONS, SSLContext.getDefault());
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public CompletableFuture<Response> invoke(Request request, String data) {
@@ -194,7 +210,7 @@ public class HttpClient implements Closeable {
         Response response = new Response();
 
         CompletableFuture.completedFuture(null).thenCompose(nul -> {
-                undertowClient.connect(clientConnection, uri, xnioWorker, buffer, DEFAULT_OPTIONS);
+                undertowClient.connect(clientConnection, uri, xnioWorker, undertowXnioSsl, buffer, DEFAULT_OPTIONS);
                 return clientConnectionFuture;
             }
         ).thenCompose(connection -> {
