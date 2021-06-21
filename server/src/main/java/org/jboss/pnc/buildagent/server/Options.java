@@ -16,6 +16,7 @@ public class Options {
     private final boolean httpInvokerEnabled;
     private final int callbackMaxRetries;
     private final long callbackWaitBeforeRetry;
+    private String keycloakConfigFile;
 
     public Options(
             String host,
@@ -24,13 +25,15 @@ public class Options {
             boolean socketInvokerEnabled,
             boolean httpInvokerEnabled,
             int callbackMaxRetries,
-            long callbackWaitBeforeRetry) {
+            long callbackWaitBeforeRetry,
+            String keycloakConfigFile) {
         this.host = host;
         this.bindPath = bindPath;
         this.socketInvokerEnabled = socketInvokerEnabled;
         this.httpInvokerEnabled = httpInvokerEnabled;
         this.callbackMaxRetries = callbackMaxRetries;
         this.callbackWaitBeforeRetry = callbackWaitBeforeRetry;
+        this.keycloakConfigFile = keycloakConfigFile;
 
         if (bindPort == 0) {
             port = findFirstFreePort();
@@ -75,4 +78,7 @@ public class Options {
         return callbackWaitBeforeRetry;
     }
 
+    public String getKeycloakConfigFile() {
+        return keycloakConfigFile;
+    }
 }

@@ -4,6 +4,8 @@ import org.jboss.pnc.api.dto.HeartbeatConfig;
 import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -20,6 +22,7 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
         callback = builder.callback;
         retryConfig = builder.retryConfig;
         heartbeatConfig = builder.heartbeatConfig;
+        requestHeaders = builder.requestHeaders;
     }
 
     public static Builder newBuilder() {
@@ -33,6 +36,7 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
         builder.callback = copy.getCallback();
         builder.retryConfig = copy.getRetryConfig();
         builder.heartbeatConfig = copy.getHeartbeatConfig();
+        builder.requestHeaders = copy.getRequestHeaders();
         return builder;
     }
 
@@ -50,6 +54,7 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
         private Request callback;
         public Optional<HeartbeatConfig> heartbeatConfig = Optional.empty();
         private RetryConfig retryConfig = new RetryConfig(10, 500L);
+        private List<Request.Header> requestHeaders = Collections.emptyList();
 
         private Builder() {
         }
@@ -76,6 +81,11 @@ public class HttpClientConfiguration extends ClientConfigurationBase {
 
         public Builder retryConfig(RetryConfig retryConfig) {
             this.retryConfig = retryConfig;
+            return this;
+        }
+
+        public Builder requestHeaders(List<Request.Header> requestHeaders) {
+            this.requestHeaders = requestHeaders;
             return this;
         }
 

@@ -73,7 +73,8 @@ public class TermdServer {
                     enableSocketInvoker,
                     !enableSocketInvoker,
                     10,
-                    500);
+                    500,
+                    "");
             Map<String, String> mdcMap = new HashMap<>();
             mdcMap.put("ctx", RandomUtils.randString(6));
 

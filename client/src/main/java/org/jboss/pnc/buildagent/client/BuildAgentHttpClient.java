@@ -20,7 +20,6 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -48,7 +47,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     @Deprecated
     public BuildAgentHttpClient(String termBaseUrl, URL callbackUrl, String callbackMethod)
             throws BuildAgentClientException {
-        super(termBaseUrl, 30000, new RetryConfig(10, 500));
+        super(termBaseUrl, 30000, new RetryConfig(10, 500), Collections.emptyList());
         try {
             this.callback = new Request(
                     Request.Method.valueOf(callbackMethod),
@@ -68,7 +67,11 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
     public BuildAgentHttpClient(HttpClientConfiguration configuration)
             throws BuildAgentClientException {
-        super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout(), configuration.getRetryConfig());
+        super(
+                configuration.getTermBaseUrl(),
+                configuration.getLivenessResponseTimeout(),
+                configuration.getRetryConfig(),
+                configuration.getRequestHeaders());
         this.callback = configuration.getCallback();
         this.heartbeatConfig = configuration.getHeartbeatConfig();
         try {
@@ -89,7 +92,8 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
                 httpClient,
                 configuration.getTermBaseUrl(),
                 configuration.getLivenessResponseTimeout(),
-                configuration.getRetryConfig());
+                configuration.getRetryConfig(),
+                configuration.getRequestHeaders());
         this.callback = configuration.getCallback();
         this.heartbeatConfig = configuration.getHeartbeatConfig();
         try {
@@ -152,9 +156,8 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
 
         return asJson(new InvokeRequest(cmd, this.callback, heartbeatConfig.orElse(null)))
                 .thenCompose(requestJson -> {
-            List<Request.Header> headers = Collections.emptyList();
             return getHttpClient().invoke(
-                    new Request(Request.Method.POST, invokerUri, headers),
+                    new Request(Request.Method.POST, invokerUri, requestHeaders),
                     ByteBuffer.wrap(requestJson.getBytes(StandardCharsets.UTF_8)),
                     retryConfig.getMaxRetries(),
                     retryConfig.getWaitBeforeRetry(),
@@ -187,7 +190,7 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
     public CompletableFuture<HttpClient.Response> cancel(String sessionId) {
         return asJson(new Cancel(sessionId))
                 .thenCompose(requestJson -> getHttpClient().invoke(
-                        new Request(Request.Method.PUT, invokerUri),
+                        new Request(Request.Method.PUT, invokerUri, requestHeaders),
                         ByteBuffer.wrap(requestJson.getBytes(StandardCharsets.UTF_8)),
                         retryConfig.getMaxRetries(),
                         retryConfig.getWaitBeforeRetry(),
