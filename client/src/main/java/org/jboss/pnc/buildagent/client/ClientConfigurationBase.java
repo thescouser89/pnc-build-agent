@@ -1,6 +1,9 @@
 package org.jboss.pnc.buildagent.client;
 
+import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
+
+import java.util.List;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
@@ -15,6 +18,7 @@ public abstract class ClientConfigurationBase {
     protected long livenessResponseTimeout;
 
     protected RetryConfig retryConfig;
+    protected List<Request.Header> requestHeaders;
 
     public String getTermBaseUrl() {
         return termBaseUrl;
@@ -26,5 +30,9 @@ public abstract class ClientConfigurationBase {
 
     public RetryConfig getRetryConfig() {
         return retryConfig;
+    }
+
+    public List<Request.Header> getRequestHeaders() {
+        return requestHeaders;
     }
 }

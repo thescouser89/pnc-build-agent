@@ -16,7 +16,6 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -49,10 +48,16 @@ public abstract class BuildAgentClientBase implements Closeable {
     private final URL fileUploadUrl;
     private final URL fileDownloadUrl;
     private final URL processListUrl;
+    protected final List<Request.Header> requestHeaders;
 
-    public BuildAgentClientBase(String termBaseUrl, long livenessResponseTimeout, RetryConfig retryConfig) throws BuildAgentClientException {
+    public BuildAgentClientBase(
+            String termBaseUrl,
+            long livenessResponseTimeout,
+            RetryConfig retryConfig,
+            List<Request.Header> requestHeaders) throws BuildAgentClientException {
         this.livenessResponseTimeout = livenessResponseTimeout;
         this.retryConfig = retryConfig;
+        this.requestHeaders = requestHeaders;
         termBaseUrl = StringUtils.stripEndingSlash(termBaseUrl);
         this.livenessProbeLocation = URI.create(termBaseUrl + "/servlet/is-alive");
 
@@ -85,15 +90,21 @@ public abstract class BuildAgentClientBase implements Closeable {
     /**
      * It is preferable to use a single instance of a HttpClient for all the BuildAgentClients because of the HttpClient's
      * internal thread pool.
-     *
-     * @param httpClient
+     *  @param httpClient
      * @param termBaseUrl
      * @param livenessResponseTimeout
+     * @param requestHeaders
      */
-    public BuildAgentClientBase(HttpClient httpClient, String termBaseUrl, long livenessResponseTimeout, RetryConfig retryConfig)
+    public BuildAgentClientBase(
+            HttpClient httpClient,
+            String termBaseUrl,
+            long livenessResponseTimeout,
+            RetryConfig retryConfig,
+            List<Request.Header> requestHeaders)
             throws BuildAgentClientException {
         this.livenessResponseTimeout = livenessResponseTimeout;
         this.retryConfig = retryConfig;
+        this.requestHeaders = requestHeaders;
         termBaseUrl = StringUtils.stripEndingSlash(termBaseUrl);
         this.livenessProbeLocation = URI.create(termBaseUrl + "/servlet/is-alive");
         this.internalHttpClient = Optional.empty();
@@ -120,7 +131,7 @@ public abstract class BuildAgentClientBase implements Closeable {
 
     public boolean isServerAlive() {
         CompletableFuture<HttpClient.Response> responseFuture = getHttpClient().invoke(
-                new Request(HEAD, livenessProbeLocation), "");
+                new Request(HEAD, livenessProbeLocation, requestHeaders), "");
         try {
             HttpClient.Response response = responseFuture.get(livenessResponseTimeout, TimeUnit.MILLISECONDS);
             boolean isSuccess = response.getCode() == 200;
@@ -144,17 +155,14 @@ public abstract class BuildAgentClientBase implements Closeable {
             ByteBuffer buffer,
             Path remoteFilePath) {
         return getUri(fileUploadUrl.toString() + remoteFilePath.toString())
-                .thenCompose(uri -> {
-            List<Request.Header> headers = Collections.emptyList();//TODO headers
-            return getHttpClient().invoke(
-                    new Request(PUT, uri, headers),
-                    buffer,
-                    retryConfig.getMaxRetries(),
-                    retryConfig.getWaitBeforeRetry(),
-                    -1L,
-                    0,
-                    0);
-        });
+                .thenCompose(uri -> getHttpClient().invoke(
+                        new Request(PUT, uri, requestHeaders),
+                        buffer,
+                        retryConfig.getMaxRetries(),
+                        retryConfig.getWaitBeforeRetry(),
+                        -1L,
+                        0,
+                        0));
     }
 
     public CompletableFuture<HttpClient.Response> downloadFile(
@@ -166,34 +174,28 @@ public abstract class BuildAgentClientBase implements Closeable {
             Path remoteFilePath,
             long maxDownloadSize) {
         return getUri(fileDownloadUrl + remoteFilePath.toString())
-                .thenCompose(uri -> {
-                    List<Request.Header> headers = Collections.emptyList(); //TODO headers
-                    return getHttpClient().invoke(
-                            new Request(GET, uri, headers),
-                            ByteBuffer.allocate(0),
-                            retryConfig.getMaxRetries(),
-                            retryConfig.getWaitBeforeRetry(),
-                            maxDownloadSize,
-                            0,
-                            0
-                    );
-                });
+                .thenCompose(uri -> getHttpClient().invoke(
+                        new Request(GET, uri, requestHeaders),
+                        ByteBuffer.allocate(0),
+                        retryConfig.getMaxRetries(),
+                        retryConfig.getWaitBeforeRetry(),
+                        maxDownloadSize,
+                        0,
+                        0
+                ));
     }
 
     public CompletableFuture<Set<String>> getRunningProcesses() {
         return getUri(processListUrl.toString())
-                .thenCompose(uri -> {
-                    List<Request.Header> headers = Collections.emptyList(); //TODO headers
-                    return getHttpClient().invoke(
-                            new Request(GET, uri, headers),
-                            ByteBuffer.allocate(0),
-                            retryConfig.getMaxRetries(),
-                            retryConfig.getWaitBeforeRetry(),
-                            -1L,
-                            0,
-                            0
-                    );
-                })
+                .thenCompose(uri -> getHttpClient().invoke(
+                        new Request(GET, uri, requestHeaders),
+                        ByteBuffer.allocate(0),
+                        retryConfig.getMaxRetries(),
+                        retryConfig.getWaitBeforeRetry(),
+                        -1L,
+                        0,
+                        0
+                ))
                 .thenApply(response -> {
                     if (response.getCode() == 200) {
                         TypeReference<Set<String>> typeRef = new TypeReference<Set<String>>() {};

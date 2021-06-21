@@ -25,8 +25,10 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.PathHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
+import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
+import io.undertow.servlet.api.FilterInfo;
 import org.jboss.pnc.buildagent.api.Constants;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
@@ -40,9 +42,12 @@ import org.jboss.pnc.buildagent.server.servlet.Terminal;
 import org.jboss.pnc.buildagent.server.servlet.Upload;
 import org.jboss.pnc.buildagent.server.servlet.Welcome;
 import org.jboss.pnc.buildagent.server.termserver.Term;
+import org.jboss.pnc.common.Strings;
+import org.keycloak.adapters.servlet.KeycloakOIDCFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.servlet.DispatcherType;
 import javax.servlet.ServletException;
 import java.io.IOException;
 import java.net.URL;
@@ -59,6 +64,7 @@ import static io.undertow.servlet.Servlets.deployment;
 import static io.undertow.servlet.Servlets.servlet;
 import static org.jboss.pnc.buildagent.api.Constants.HTTP_INVOKER_PATH;
 import static org.jboss.pnc.buildagent.api.Constants.RUNNING_PROCESSES;
+import static org.keycloak.adapters.servlet.KeycloakOIDCFilter.CONFIG_FILE_PARAM;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -106,6 +112,16 @@ public class BootstrapUndertow {
                         servlet("DownloaderServlet", Download.class)
                                 .addMapping("/download/*"));
 
+        if (!Strings.isEmpty(options.getKeycloakConfigFile())) {
+            FilterInfo keycloakOIDCFilter = Servlets.filter(KeycloakOIDCFilter.class.getSimpleName(), KeycloakOIDCFilter.class);
+            keycloakOIDCFilter.addInitParam(CONFIG_FILE_PARAM, options.getKeycloakConfigFile());
+            servletBuilder.addFilter(keycloakOIDCFilter);
+            servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), "/terminal/*", DispatcherType.REQUEST);
+            servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), "/upload/*", DispatcherType.REQUEST);
+        } else {
+            log.warn("Endpoint authentication is NOT ENABLED!. Specify keycloak config file.");
+        }
+
         if (options.isHttpInvokerEnabled()) {
 
             try {
@@ -126,6 +142,11 @@ public class BootstrapUndertow {
                                     retryConfig,
                                     new Heartbeat(httpClient))
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
+            if (!Strings.isEmpty(options.getKeycloakConfigFile())) {
+                servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), HTTP_INVOKER_PATH + "/*", DispatcherType.REQUEST);
+            } else {
+                log.warn("Endpoint authentication is NOT ENABLED!. Specify keycloak config file.");
+            }
         }
 
         DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
@@ -142,6 +163,7 @@ public class BootstrapUndertow {
                 .addPrefixPath(servletPath, servletHandler)
                 .addPrefixPath(httpPath, exchange -> handleHttpRequests(exchange, httpPath));
         if (options.isSocketInvokerEnabled()) {
+            log.warn("UNSECURED socket invoker is enabled!");
             pathHandler.addPrefixPath(socketPath, exchange -> handleWebSocketRequests(exchange, socketPath));
         }
 

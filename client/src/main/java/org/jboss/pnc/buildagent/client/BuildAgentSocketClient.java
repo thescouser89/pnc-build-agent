@@ -40,6 +40,7 @@ import java.net.URI;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -93,7 +94,7 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
             String commandContext,
             ResponseMode responseMode,
             boolean readOnly) throws TimeoutException, InterruptedException, BuildAgentClientException {
-        super(termBaseUrl, 30000, new RetryConfig(10, 500L));
+        super(termBaseUrl, 30000, new RetryConfig(10, 500L), Collections.emptyList());
         this.commandContext = formatCommandContext(commandContext);
         this.responseMode = responseMode;
         this.readOnly = readOnly;
@@ -111,7 +112,11 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
             SocketClientConfiguration configuration)
             throws TimeoutException, InterruptedException, BuildAgentClientException {
-        super(configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout(), configuration.getRetryConfig());
+        super(
+                configuration.getTermBaseUrl(),
+                configuration.getLivenessResponseTimeout(),
+                configuration.getRetryConfig(),
+                configuration.getRequestHeaders());
         this.commandContext = formatCommandContext(configuration.getCommandContext());
         this.responseMode = configuration.getResponseMode();
         this.readOnly = configuration.isReadOnly();
@@ -135,7 +140,12 @@ public class BuildAgentSocketClient extends BuildAgentClientBase implements Buil
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
             SocketClientConfiguration configuration)
             throws TimeoutException, InterruptedException, BuildAgentClientException {
-        super(httpClient, configuration.getTermBaseUrl(), configuration.getLivenessResponseTimeout(), configuration.getRetryConfig());
+        super(
+                httpClient,
+                configuration.getTermBaseUrl(),
+                configuration.getLivenessResponseTimeout(),
+                configuration.getRetryConfig(),
+                configuration.getRequestHeaders());
         this.commandContext = formatCommandContext(configuration.getCommandContext());
         this.responseMode = configuration.getResponseMode();
         this.readOnly = configuration.isReadOnly();
