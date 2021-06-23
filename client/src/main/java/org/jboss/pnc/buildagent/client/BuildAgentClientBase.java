@@ -16,6 +16,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -57,7 +58,11 @@ public abstract class BuildAgentClientBase implements Closeable {
             List<Request.Header> requestHeaders) throws BuildAgentClientException {
         this.livenessResponseTimeout = livenessResponseTimeout;
         this.retryConfig = retryConfig;
-        this.requestHeaders = requestHeaders;
+        if (requestHeaders == null) {
+            this.requestHeaders = Collections.emptyList();
+        } else {
+            this.requestHeaders = requestHeaders;
+        }
         termBaseUrl = StringUtils.stripEndingSlash(termBaseUrl);
         this.livenessProbeLocation = URI.create(termBaseUrl + "/servlet/is-alive");
 
@@ -104,7 +109,11 @@ public abstract class BuildAgentClientBase implements Closeable {
             throws BuildAgentClientException {
         this.livenessResponseTimeout = livenessResponseTimeout;
         this.retryConfig = retryConfig;
-        this.requestHeaders = requestHeaders;
+        if (requestHeaders == null) {
+            this.requestHeaders = Collections.emptyList();
+        } else {
+            this.requestHeaders = requestHeaders;
+        }
         termBaseUrl = StringUtils.stripEndingSlash(termBaseUrl);
         this.livenessProbeLocation = URI.create(termBaseUrl + "/servlet/is-alive");
         this.internalHttpClient = Optional.empty();
