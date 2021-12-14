@@ -26,6 +26,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -92,7 +93,10 @@ public class HttpClient implements Closeable {
     }
 
     public CompletableFuture<Response> invoke(Request request, String data) {
-        logger.debug("Making {} request to the endpoint {}; request data: {}.", request.getMethod(), request.getUri(), data);
+        logger.debug("Making {} request to the endpoint {}.", request.getMethod(), request.getUri());
+        if (logger.isTraceEnabled()) {
+            logger.trace("Making {} request to the endpoint {}; request data: {}.", request.getMethod(), request.getUri(), data);
+        }
         return invoke(request, ByteBuffer.wrap(data.getBytes(UTF_8)), 0, 0L, -1L, 0, 0);
     }
 
@@ -115,8 +119,11 @@ public class HttpClient implements Closeable {
             long maxDownloadSize,
             int readTimeout,
             int writeTimeout) {
-        logger.info("Making request {} {}; Headers: {} request data: {}.",
-                request.getMethod(), request.getUri(), request.getHeaders(), data);
+        logger.info("Making request {} {}; Headers: {}.", request.getMethod(), request.getUri(), request.getHeaders());
+        if (data != null && logger.isTraceEnabled()) {
+            logger.trace("Making request {} {}; Headers: {} request data: {}.", request.getMethod(), request.getUri(), request.getHeaders(), StandardCharsets.UTF_8.decode(data).toString());
+            data.rewind();
+        }
 
         CompletableFuture<Response> responseFuture = new CompletableFuture<>();
         invokeAttempt(request.getUri(), request.getMethod(), request.getHeaders(), data, responseFuture, 0, maxRetries, waitBeforeRetry, maxDownloadSize, readTimeout, writeTimeout);
@@ -148,11 +155,19 @@ public class HttpClient implements Closeable {
             int writeTimeout) {
         if (attempt > 0) {
             logger.warn(
-                    "Retrying ({}) {} request to the endpoint {}; request data: {}.",
+                    "Retrying ({}) {} request to the endpoint {}.",
                     attempt,
                     requestMethod,
-                    uri.toString(),
-                    data);
+                    uri.toString());
+            if (data != null && logger.isTraceEnabled()) {
+                logger.trace(
+                        "Retrying ({}) {} request to the endpoint {}; request data: {}.",
+                        attempt,
+                        requestMethod,
+                        uri.toString(),
+                        StandardCharsets.UTF_8.decode(data).toString());
+                data.rewind();
+            }
         }
 
         UndertowClient undertowClient = UndertowClient.getInstance();
