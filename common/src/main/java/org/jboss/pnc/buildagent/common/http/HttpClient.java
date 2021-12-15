@@ -270,6 +270,7 @@ public class HttpClient implements Closeable {
             if (throwable != null) {
                 logger.error("Error: ", throwable);
                 if (maxRetries > 0 && attempt < maxRetries) {
+                    data.rewind();
                     executor.schedule(
                             () -> invokeAttempt(
                                     uri,
