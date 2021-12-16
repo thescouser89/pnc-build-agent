@@ -34,7 +34,7 @@ import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
-import org.jboss.pnc.buildagent.server.httpinvoker.Heartbeat;
+import org.jboss.pnc.buildagent.common.http.HeartbeatSender;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.servlet.Download;
 import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
@@ -140,7 +140,7 @@ public class BootstrapUndertow {
                                     httpClient,
                                     new SessionRegistry(),
                                     retryConfig,
-                                    new Heartbeat(httpClient))
+                                    new HeartbeatSender(httpClient))
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
             if (!Strings.isEmpty(options.getKeycloakConfigFile())) {
                 servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), HTTP_INVOKER_PATH + "/*", DispatcherType.REQUEST);
@@ -152,7 +152,7 @@ public class BootstrapUndertow {
         DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
         manager.deploy();
 
-        HttpHandler servletHandler = null;
+        HttpHandler servletHandler;
         try {
             servletHandler = manager.start();
         } catch (ServletException e) {
@@ -253,14 +253,11 @@ public class BootstrapUndertow {
     private Term createNewTerm(String invokerContext, Set<ReadOnlyChannel> appendReadOnlyChannels) {
         log.info("Creating new term for context [{}].", invokerContext);
         Runnable onDestroy = () -> terms.remove(invokerContext);
-        Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannels);
-        return term;
+        return new Term(invokerContext, onDestroy, executor, appendReadOnlyChannels);
     }
 
     public Map<String, Term> getTerms() {
-        Map<String, Term> termsClone = new HashMap<>();
-        termsClone.putAll(terms);
-        return termsClone;
+        return new HashMap<>(terms);
     }
 
     private void handleHttpRequests(HttpServerExchange exchange, String httpPath) throws Exception {

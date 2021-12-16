@@ -1,9 +1,8 @@
-package org.jboss.pnc.buildagent.server.httpinvoker;
+package org.jboss.pnc.buildagent.common.http;
 
 import org.jboss.pnc.api.dto.HeartbeatConfig;
 import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.common.concurrent.MDCScheduledThreadPoolExecutor;
-import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.common.concurrent.NamedThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,14 +11,14 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 
-public class Heartbeat {
+public class HeartbeatSender {
 
-    private final Logger logger = LoggerFactory.getLogger(Heartbeat.class);
+    private final Logger logger = LoggerFactory.getLogger(HeartbeatSender.class);
 
     private final ScheduledExecutorService executor;
     private final HttpClient httpClient;
 
-    public Heartbeat(HttpClient httpClient) {
+    public HeartbeatSender(HttpClient httpClient) {
         this.httpClient = httpClient;
         executor = new MDCScheduledThreadPoolExecutor(1, new NamedThreadFactory("heartbeat"));
     }
