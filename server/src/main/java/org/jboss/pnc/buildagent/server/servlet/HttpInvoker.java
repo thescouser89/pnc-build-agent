@@ -12,17 +12,16 @@ import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeResponse;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.Arrays;
+import org.jboss.pnc.buildagent.common.http.HeartbeatSender;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.common.security.Md5;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.server.httpinvoker.CommandSession;
-import org.jboss.pnc.buildagent.server.httpinvoker.Heartbeat;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.termserver.StatusConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -53,7 +52,7 @@ public class HttpInvoker extends HttpServlet {
     private final HttpClient httpClient;
 
     private final RetryConfig retryConfig;
-    private final Heartbeat heartbeat;
+    private final HeartbeatSender heartbeat;
 
     private final Md5 stdoutChecksum;
 
@@ -63,7 +62,7 @@ public class HttpInvoker extends HttpServlet {
             SessionRegistry sessionRegistry,
             HttpClient httpClient,
             RetryConfig retryConfig,
-            Heartbeat heartbeat)
+            HeartbeatSender heartbeat)
             throws NoSuchAlgorithmException {
         this.readOnlyChannels = readOnlyChannels;
         this.sessionRegistry = sessionRegistry;
@@ -74,7 +73,7 @@ public class HttpInvoker extends HttpServlet {
     }
 
     @Override
-    protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doPut(HttpServletRequest request, HttpServletResponse response) throws IOException {
         Cancel cancelRequest = objectMapper.readValue(request.getInputStream(), Cancel.class);
         Optional<CommandSession> commandSession = sessionRegistry.get(cancelRequest.getSessionId());
 
@@ -110,7 +109,7 @@ public class HttpInvoker extends HttpServlet {
         ptyMaster.setChangeHandler((oldStatus, newStatus) -> {
             if (newStatus.isFinal()) {
                 onComplete(commandSession, newStatus, invokeRequest.getCallback());
-                heartbeatFuture.ifPresent(future -> this.heartbeat.stop(future));
+                heartbeatFuture.ifPresent(heartbeat::stop);
             }
         });
         commandSession.setPtyMaster(ptyMaster);
