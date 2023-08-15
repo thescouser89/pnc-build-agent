@@ -10,3 +10,6 @@ target/
 # IntelliJ
 *.iml
 .idea
+
+# file produced by unit test
+server/console.log

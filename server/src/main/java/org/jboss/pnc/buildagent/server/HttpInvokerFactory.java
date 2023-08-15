@@ -6,6 +6,7 @@ import io.undertow.servlet.util.ImmediateInstanceHandle;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.common.http.HeartbeatSender;
+import org.jboss.pnc.buildagent.common.security.KeycloakClient;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
 
@@ -26,17 +27,21 @@ public class HttpInvokerFactory implements InstanceFactory<HttpInvoker> {
     private final RetryConfig retryConfig;
     private final HeartbeatSender heartbeat;
 
+    private final KeycloakClient keycloakClient;
+
     public HttpInvokerFactory(
             Set<ReadOnlyChannel> readOnlyChannels,
             HttpClient httpClient,
             SessionRegistry sessionRegistry,
             RetryConfig retryConfig,
-            HeartbeatSender heartbeat) {
+            HeartbeatSender heartbeat,
+            KeycloakClient keycloakClient) {
         this.readOnlyChannels = readOnlyChannels;
         this.httpClient = httpClient;
         this.sessionRegistry = sessionRegistry;
         this.retryConfig = retryConfig;
         this.heartbeat = heartbeat;
+        this.keycloakClient = keycloakClient;
     }
 
     @Override
@@ -47,7 +52,8 @@ public class HttpInvokerFactory implements InstanceFactory<HttpInvoker> {
                     sessionRegistry,
                     httpClient,
                     retryConfig,
-                    heartbeat));
+                    heartbeat,
+                    keycloakClient));
         } catch (NoSuchAlgorithmException e) {
             throw new InstantiationException("Cannot create HttpInvoker: " + e.getMessage());
         }
