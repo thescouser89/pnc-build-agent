@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.Status;
+import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.dto.HeartbeatConfig;
 import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
@@ -14,6 +15,7 @@ import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.Arrays;
 import org.jboss.pnc.buildagent.common.http.HeartbeatSender;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
+import org.jboss.pnc.buildagent.common.security.KeycloakClient;
 import org.jboss.pnc.buildagent.common.security.Md5;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.server.httpinvoker.CommandSession;
@@ -56,13 +58,16 @@ public class HttpInvoker extends HttpServlet {
 
     private final Md5 stdoutChecksum;
 
+    private final KeycloakClient keycloakClient;
+
 
     public HttpInvoker(
             Set<ReadOnlyChannel> readOnlyChannels,
             SessionRegistry sessionRegistry,
             HttpClient httpClient,
             RetryConfig retryConfig,
-            HeartbeatSender heartbeat)
+            HeartbeatSender heartbeat,
+            KeycloakClient keycloakClient)
             throws NoSuchAlgorithmException {
         this.readOnlyChannels = readOnlyChannels;
         this.sessionRegistry = sessionRegistry;
@@ -70,6 +75,7 @@ public class HttpInvoker extends HttpServlet {
         this.retryConfig = retryConfig;
         this.heartbeat = heartbeat;
         this.stdoutChecksum = new Md5();
+        this.keycloakClient = keycloakClient;
     }
 
     @Override
@@ -148,6 +154,7 @@ public class HttpInvoker extends HttpServlet {
         //notify completion via callback
         try {
             String data = objectMapper.writeValueAsString(updateEventBuilder.build());
+            authenticateCallback(callback);
             httpClient.invoke(
                     callback,
                     ByteBuffer.wrap(data.getBytes(UTF_8)),
@@ -166,6 +173,13 @@ public class HttpInvoker extends HttpServlet {
             });
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize invoke object.", e);
+        }
+    }
+
+    private void authenticateCallback(Request original) {
+        if (keycloakClient != null) {
+            String accessToken = keycloakClient.getAccessToken();
+            original.getHeaders().add(new Request.Header(HttpHeaders.AUTHORIZATION_STRING, "Bearer " + accessToken));
         }
     }
 }

@@ -35,6 +35,9 @@ import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.common.http.HeartbeatSender;
+import org.jboss.pnc.buildagent.common.security.KeycloakClient;
+import org.jboss.pnc.buildagent.common.security.KeycloakClientConfiguration;
+import org.jboss.pnc.buildagent.common.security.KeycloakClientConfigurationException;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
 import org.jboss.pnc.buildagent.server.servlet.Download;
 import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
@@ -49,6 +52,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.servlet.DispatcherType;
 import javax.servlet.ServletException;
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Enumeration;
@@ -130,6 +134,16 @@ public class BootstrapUndertow {
                 throw new BuildAgentException("Cannot initialize callback client.", e);
             }
 
+            KeycloakClient keycloakClient = null;
+            if (!options.getKeycloakConfigFile().isEmpty()) {
+                try {
+                    keycloakClient = new KeycloakClient(KeycloakClientConfiguration.parseJson(
+                            new File(options.getKeycloakClientConfigFile())));
+                } catch (KeycloakClientConfigurationException e) {
+                    throw new BuildAgentException("Cannot read the Keycloak client configuration file", e);
+                }
+            }
+
             RetryConfig retryConfig = new RetryConfig(
                     options.getCallbackMaxRetries(),
                     options.getCallbackWaitBeforeRetry());
@@ -140,7 +154,8 @@ public class BootstrapUndertow {
                                     httpClient,
                                     new SessionRegistry(),
                                     retryConfig,
-                                    new HeartbeatSender(httpClient))
+                                    new HeartbeatSender(httpClient),
+                                    keycloakClient)
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
             if (!Strings.isEmpty(options.getKeycloakConfigFile())) {
                 servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), HTTP_INVOKER_PATH + "/*", DispatcherType.REQUEST);
