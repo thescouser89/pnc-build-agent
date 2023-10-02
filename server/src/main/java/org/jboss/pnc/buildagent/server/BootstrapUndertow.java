@@ -135,7 +135,7 @@ public class BootstrapUndertow {
             }
 
             KeycloakClient keycloakClient = null;
-            if (!options.getKeycloakConfigFile().isEmpty()) {
+            if (!options.getKeycloakClientConfigFile().isEmpty()) {
                 try {
                     keycloakClient = new KeycloakClient(KeycloakClientConfiguration.parseJson(
                             new File(options.getKeycloakClientConfigFile())));
