@@ -137,6 +137,7 @@ public class BootstrapUndertow {
             KeycloakClient keycloakClient = null;
             if (!options.getKeycloakClientConfigFile().isEmpty()) {
                 try {
+                    log.info("Reading keycloak client config from file: {}", options.getKeycloakClientConfigFile());
                     keycloakClient = new KeycloakClient(KeycloakClientConfiguration.parseJson(
                             new File(options.getKeycloakClientConfigFile())));
                 } catch (KeycloakClientConfigurationException e) {
