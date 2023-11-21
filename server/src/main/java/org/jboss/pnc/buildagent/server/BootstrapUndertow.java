@@ -33,6 +33,7 @@ import org.jboss.pnc.buildagent.api.Constants;
 import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.api.httpinvoke.RetryConfig;
 import org.jboss.pnc.buildagent.common.BuildAgentException;
+import org.jboss.pnc.buildagent.common.http.HeartbeatHttpHeaderProvider;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.common.http.HeartbeatSender;
 import org.jboss.pnc.buildagent.common.security.KeycloakClient;
@@ -44,6 +45,7 @@ import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
 import org.jboss.pnc.buildagent.server.servlet.Terminal;
 import org.jboss.pnc.buildagent.server.servlet.Upload;
 import org.jboss.pnc.buildagent.server.servlet.Welcome;
+import org.jboss.pnc.buildagent.server.termserver.KeycloakHeartbeatHttpHeaderProvider;
 import org.jboss.pnc.buildagent.server.termserver.Term;
 import org.jboss.pnc.common.Strings;
 import org.keycloak.adapters.servlet.KeycloakOIDCFilter;
@@ -145,6 +147,7 @@ public class BootstrapUndertow {
                 }
             }
 
+            HeartbeatHttpHeaderProvider heartbeatHttpHeaderProvider = new KeycloakHeartbeatHttpHeaderProvider(keycloakClient);
             RetryConfig retryConfig = new RetryConfig(
                     options.getCallbackMaxRetries(),
                     options.getCallbackWaitBeforeRetry());
@@ -155,7 +158,7 @@ public class BootstrapUndertow {
                                     httpClient,
                                     new SessionRegistry(),
                                     retryConfig,
-                                    new HeartbeatSender(httpClient),
+                                    new HeartbeatSender(httpClient, heartbeatHttpHeaderProvider),
                                     keycloakClient)
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
             if (!Strings.isEmpty(options.getKeycloakConfigFile())) {
