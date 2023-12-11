@@ -155,7 +155,7 @@
       <dependency>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-logging</artifactId>
-        <version>18.1.2.Final</version>
+        <version>22.0.2.Final</version>
         <exclusions>
           <exclusion>
             <groupId>org.jboss.msc</groupId>
