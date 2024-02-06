@@ -20,6 +20,7 @@ package org.jboss.pnc.buildagent.server;
 
 import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.common.RandomUtils;
+import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +76,9 @@ public class TermdServer {
                     10,
                     500,
                     "",
-                    "");
+                    "",
+                    HttpClient.DEFAULT_HTTP_READ,
+                    HttpClient.DEFAULT_HTTP_WRITE);
             Map<String, String> mdcMap = new HashMap<>();
             mdcMap.put("ctx", RandomUtils.randString(6));
 

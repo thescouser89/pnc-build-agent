@@ -131,7 +131,7 @@ public class BootstrapUndertow {
         if (options.isHttpInvokerEnabled()) {
 
             try {
-                httpClient = new HttpClient();
+                httpClient = new HttpClient(options.getHttpReadTimeout(), options.getHttpWriteTimeout());
             } catch (IOException e) {
                 throw new BuildAgentException("Cannot initialize callback client.", e);
             }
