@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -49,6 +50,8 @@ public class HttpClient implements Closeable {
     private final UndertowXnioSsl undertowXnioSsl;
 
     public static final OptionMap DEFAULT_OPTIONS;
+    public static int DEFAULT_HTTP_WRITE = 30000;
+    public static int DEFAULT_HTTP_READ = 30000;
 
     private ScheduledExecutorService executor = new MDCScheduledThreadPoolExecutor(4);
 
@@ -58,14 +61,27 @@ public class HttpClient implements Closeable {
                 .set(Options.TCP_NODELAY, true)
                 .set(Options.KEEP_ALIVE, true)
                 .set(Options.WORKER_NAME, "Build Agent Http Client")
-                .set(Options.READ_TIMEOUT, 30000)
-                .set(Options.WRITE_TIMEOUT, 30000);
+                .set(Options.READ_TIMEOUT, DEFAULT_HTTP_READ)
+                .set(Options.WRITE_TIMEOUT, DEFAULT_HTTP_WRITE);
         DEFAULT_OPTIONS = builder.getMap();
     }
 
     public HttpClient() throws IOException {
+        this(DEFAULT_OPTIONS);
+    }
+
+    public HttpClient(int httpReadTimeout, int httpWriteTimeout) throws IOException {
+        this(OptionMap.builder()
+            .addAll(DEFAULT_OPTIONS)
+            .set(Options.READ_TIMEOUT, httpReadTimeout)
+            .set(Options.WRITE_TIMEOUT, httpWriteTimeout)
+            .getMap());
+    }
+
+    public HttpClient(OptionMap options) throws IOException {
         final Xnio xnio = Xnio.getInstance();
-        xnioWorker = xnio.createWorker(null, DEFAULT_OPTIONS);
+
+        xnioWorker = xnio.createWorker(null, options);
 
         buffer = new DefaultByteBufferPool(
                 true,

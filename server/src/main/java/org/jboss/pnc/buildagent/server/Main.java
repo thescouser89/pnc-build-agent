@@ -27,6 +27,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.common.RandomUtils;
+import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.server.logging.Mdc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static org.jboss.pnc.buildagent.common.http.HttpClient.DEFAULT_HTTP_READ;
+import static org.jboss.pnc.buildagent.common.http.HttpClient.DEFAULT_HTTP_WRITE;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -66,6 +70,8 @@ public class Main {
         options.addOption(null, "callbackWaitBeforeRetry",true, "How long to wait before completion callback retry (calculated as: attempt x duration-in-millis).");
         options.addOption(null, "keycloakConfig",true, "Path to Keycloak config file. Must be set to enable endpoint protection.");
         options.addOption(null, "keycloakClientConfig", true, "Path to Keycloak client config file. Must be set to enable callback authentication");
+        options.addOption(null, "httpReadTimeout", true, "Http client timeout for read operations. The value is number in milliseconds (default is " + DEFAULT_HTTP_READ + "ms).");
+        options.addOption(null, "httpWriteTimeout", true, "Http client timeout for write operations. The value is number in milliseconds (default is " + DEFAULT_HTTP_WRITE + "ms).");
         options.addOption("h", false, "Print this help message.");
 
         CommandLineParser parser = new DefaultParser();
@@ -134,6 +140,32 @@ public class Main {
         String keycloakConfigFile = getOption(cmd, "keycloakConfig", "");
         String keycloakClientConfigFile = getOption(cmd, "keycloakClientConfig", "");
 
+        String httpReadTimeoutString = getOption(cmd, "httpReadTimeout", null);
+        int httpReadTimeout;
+        if (httpReadTimeoutString != null) {
+            httpReadTimeout = Integer.parseInt(httpReadTimeoutString);
+        } else {
+            String env = System.getenv("BUILD_AGENT_HTTP_READ_TIMEOUT");
+            if (env != null) {
+                httpReadTimeout = Integer.parseInt(env);
+            } else {
+                httpReadTimeout = DEFAULT_HTTP_READ;
+            }
+        }
+
+        String httpWriteTimeoutString = getOption(cmd, "httpWriteTimeout", null);
+        int httpWriteTimeout;
+        if (httpWriteTimeoutString != null) {
+            httpWriteTimeout = Integer.parseInt(httpWriteTimeoutString);
+        } else {
+            String env = System.getenv("BUILD_AGENT_HTTP_WRITE_TIMEOUT");
+            if (env != null) {
+                httpWriteTimeout = Integer.parseInt(env);
+            } else {
+                httpWriteTimeout = DEFAULT_HTTP_WRITE;
+            }
+        }
+
         org.jboss.pnc.buildagent.server.Options buildAgentOptions = new org.jboss.pnc.buildagent.server.Options(
                 host,
                 port,
@@ -143,7 +175,9 @@ public class Main {
                 callbackMaxRetries,
                 callbackWaitBeforeRetry,
                 keycloakConfigFile,
-                keycloakClientConfigFile);
+                keycloakClientConfigFile,
+                httpReadTimeout,
+                httpWriteTimeout);
 
         new BuildAgentServer(
                 logPath,
