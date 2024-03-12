@@ -5,8 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.termd.core.pty.PtyMaster;
 import io.termd.core.pty.Status;
 import org.jboss.pnc.api.constants.HttpHeaders;
+import org.jboss.pnc.api.constants.MDCKeys;
 import org.jboss.pnc.api.dto.HeartbeatConfig;
 import org.jboss.pnc.api.dto.Request;
+import org.jboss.pnc.bifrost.upload.BifrostLogUploader;
+import org.jboss.pnc.bifrost.upload.BifrostUploadException;
+import org.jboss.pnc.bifrost.upload.LogMetadata;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.api.httpinvoke.Cancel;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
@@ -17,6 +21,7 @@ import org.jboss.pnc.buildagent.common.http.HeartbeatSender;
 import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.common.security.KeycloakClient;
 import org.jboss.pnc.buildagent.common.security.Md5;
+import org.jboss.pnc.buildagent.server.BifrostUploaderOptions;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.server.httpinvoker.CommandSession;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
@@ -28,9 +33,12 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Future;
@@ -54,6 +62,9 @@ public class HttpInvoker extends HttpServlet {
     private final HttpClient httpClient;
 
     private final RetryConfig retryConfig;
+
+    private final BifrostUploaderOptions bifrostUploaderOptions;
+
     private final HeartbeatSender heartbeat;
 
     private final Md5 stdoutChecksum;
@@ -67,12 +78,14 @@ public class HttpInvoker extends HttpServlet {
             HttpClient httpClient,
             RetryConfig retryConfig,
             HeartbeatSender heartbeat,
+            BifrostUploaderOptions bifrostUploaderOptions,
             KeycloakClient keycloakClient)
             throws NoSuchAlgorithmException {
         this.readOnlyChannels = readOnlyChannels;
         this.sessionRegistry = sessionRegistry;
         this.httpClient = httpClient;
         this.retryConfig = retryConfig;
+        this.bifrostUploaderOptions = bifrostUploaderOptions;
         this.heartbeat = heartbeat;
         this.stdoutChecksum = new Md5();
         this.keycloakClient = keycloakClient;
@@ -137,18 +150,28 @@ public class HttpInvoker extends HttpServlet {
     private void onComplete(CommandSession commandSession, Status newStatus, Request callback) {
         TaskStatusUpdateEvent.Builder updateEventBuilder = TaskStatusUpdateEvent.newBuilder();
         updateEventBuilder.context(callback.getAttachment());
+        String md5;
         try {
-            String digest = stdoutChecksum.digest();
+            md5 = stdoutChecksum.digest();
             commandSession.close();
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
                     .newStatus(StatusConverter.fromTermdStatus(newStatus))
-                    .outputChecksum(digest);
+                    .outputChecksum(md5);
+
+            if(bifrostUploaderOptions != null) {
+                uploadLogsToBifrost(md5);
+            }
         } catch (IOException e) {
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
                     .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
                     .message("Unable to flush stdout: " + e.getMessage());
+        } catch (BifrostUploadException e) {
+            updateEventBuilder
+                    .taskId(commandSession.getSessionId())
+                    .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
+                    .message("Unable to upload logs: " + e.getMessage());
         }
 
         //notify completion via callback
@@ -174,6 +197,26 @@ public class HttpInvoker extends HttpServlet {
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize invoke object.", e);
         }
+    }
+
+    private void uploadLogsToBifrost(String md5) {
+        BifrostLogUploader logUploader = new BifrostLogUploader(URI.create(bifrostUploaderOptions.getBifrostURL()),
+                bifrostUploaderOptions.getMaxRetries(),
+                bifrostUploaderOptions.getWaitBeforeRetry(),
+                keycloakClient::getAccessToken);
+
+        Map<String, String> mdc = bifrostUploaderOptions.getMdc();
+
+        LogMetadata logMetadata = LogMetadata.builder()
+                .tag("build-log")
+                .endTime(OffsetDateTime.now())
+                .loggerName("build-agent")
+                .processContext(mdc.get(MDCKeys.PROCESS_CONTEXT_KEY))
+                .processContextVariant(mdc.get(MDCKeys.PROCESS_CONTEXT_VARIANT_KEY))
+                .tmp(mdc.get(MDCKeys.TMP_KEY))
+                .requestContext(mdc.get(MDCKeys.REQUEST_CONTEXT_KEY))
+                .build();
+        logUploader.uploadFile(bifrostUploaderOptions.getLogPath().toFile(), logMetadata, md5);
     }
 
     private void authenticateCallback(Request original) {
