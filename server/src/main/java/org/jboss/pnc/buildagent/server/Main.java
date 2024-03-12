@@ -27,11 +27,12 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.jboss.pnc.buildagent.common.BuildAgentException;
 import org.jboss.pnc.buildagent.common.RandomUtils;
-import org.jboss.pnc.buildagent.common.http.HttpClient;
 import org.jboss.pnc.buildagent.server.logging.Mdc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -54,7 +55,7 @@ public class Main {
     private static final String DEFAULT_HOST = "localhost";
     private static final String DEFAULT_PORT = "8080";
 
-    public static void main(String[] args) throws ParseException, BuildAgentException, InterruptedException {
+    public static void main(String[] args) throws ParseException, BuildAgentException, InterruptedException, IOException {
         logger.info("Starting Build Agent.");
         Options options = new Options();
         options.addOption("b", true, "Address to bind. When not specified " + DEFAULT_HOST + " is used as default.");
@@ -68,6 +69,9 @@ public class Main {
         options.addOption(null, "enableHttpInvoker",true, "Enable http with callback invoker.");
         options.addOption(null, "callbackMaxRetries",true, "How many times to retry failed completion callback.");
         options.addOption(null, "callbackWaitBeforeRetry",true, "How long to wait before completion callback retry (calculated as: attempt x duration-in-millis).");
+        options.addOption(null, "bifrostURL",true, "Bifrost URL for final log upload.");
+        options.addOption(null, "bifrostMaxRetries",true, "How many times to retry failed final log upload.");
+        options.addOption(null, "bifrostWaitBeforeRetry",true, "How long to wait before final log upload retry (calculated as: attempt x duration-in-seconds).");
         options.addOption(null, "keycloakConfig",true, "Path to Keycloak config file. Must be set to enable endpoint protection.");
         options.addOption(null, "keycloakClientConfig", true, "Path to Keycloak client config file. Must be set to enable callback authentication");
         options.addOption(null, "httpReadTimeout", true, "Http client timeout for read operations. The value is number in milliseconds (default is " + DEFAULT_HTTP_READ + "ms).");
@@ -109,10 +113,20 @@ public class Main {
         String host = getOption(cmd, "b", DEFAULT_HOST);
         int port = Integer.parseInt(getOption(cmd, "p", DEFAULT_PORT));
 
+        String bifrostURL = getOption(cmd, "bifrostURL", null);
+        BifrostUploaderOptions bifrostUploaderOptions = null;
+        if(bifrostURL != null){
+            int bifrostMaxRetries = Integer.parseInt(getOption(cmd, "bifrostMaxRetries", "6"));
+            int bifrostWaitBeforeRetry = Integer.parseInt(getOption(cmd, "bifrostWaitBeforeRetry", "10"));
+            bifrostUploaderOptions = new BifrostUploaderOptions(bifrostURL, bifrostMaxRetries, bifrostWaitBeforeRetry, mdcMap);
+        }
+
         String logPathString = getOption(cmd, "l", null);
         Optional<Path> logPath;
         if (logPathString != null) {
             logPath = Optional.of(Paths.get(logPathString));
+        } else if (bifrostUploaderOptions != null) {
+            logPath = Optional.of(Files.createTempDirectory("outputlogs"));
         } else {
             logPath = Optional.empty();
         }
@@ -174,6 +188,7 @@ public class Main {
                 httpInvokerEnabled,
                 callbackMaxRetries,
                 callbackWaitBeforeRetry,
+                bifrostUploaderOptions,
                 keycloakConfigFile,
                 keycloakClientConfigFile,
                 httpReadTimeout,

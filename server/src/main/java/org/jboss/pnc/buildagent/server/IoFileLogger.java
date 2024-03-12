@@ -43,10 +43,12 @@ public class IoFileLogger implements ReadOnlyChannel {
 
     private final boolean primary;
 
+    private final Path logPath;
+
     public IoFileLogger(Path logFolder, boolean primary) {
         this.primary = primary;
+        logPath = logFolder.resolve("console.log");
         try {
-            Path logPath = logFolder.resolve("console.log");
 
             log.info("Opening log file {}.", logPath);
             stream = new FileOutputStream(logPath.toFile(), true);
@@ -95,5 +97,9 @@ public class IoFileLogger implements ReadOnlyChannel {
     @Override
     public boolean isPrimary() {
         return primary;
+    }
+
+    public Path getLogPath() {
+        return logPath;
     }
 }

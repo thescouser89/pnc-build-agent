@@ -159,6 +159,7 @@ public class BootstrapUndertow {
                                     new SessionRegistry(),
                                     retryConfig,
                                     new HeartbeatSender(httpClient, heartbeatHttpHeaderProvider),
+                                    options.getBifrostUploaderOptions(),
                                     keycloakClient)
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
             if (!Strings.isEmpty(options.getKeycloakConfigFile())) {

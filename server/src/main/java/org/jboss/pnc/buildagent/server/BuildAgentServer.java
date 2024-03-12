@@ -81,7 +81,11 @@ public class BuildAgentServer {
 
         if (logPath.isPresent()) {
             log.info("Initializing File sink.");
-            sinkChannels.add(new IoFileLogger(logPath.get(), isPrimary(primaryLoggers, IoLoggerName.FILE)));
+            IoFileLogger fileLogger = new IoFileLogger(logPath.get(), isPrimary(primaryLoggers, IoLoggerName.FILE));
+            if (options.getBifrostUploaderOptions() != null) {
+                options.getBifrostUploaderOptions().setLogPath(fileLogger.getLogPath());
+            }
+            sinkChannels.add(fileLogger);
         }
 
         if (kafkaConfig.isPresent()) {

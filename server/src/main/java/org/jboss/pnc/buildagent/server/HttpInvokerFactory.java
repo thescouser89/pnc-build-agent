@@ -25,6 +25,7 @@ public class HttpInvokerFactory implements InstanceFactory<HttpInvoker> {
     private final HttpClient httpClient;
 
     private final RetryConfig retryConfig;
+    private final BifrostUploaderOptions bifrostUploaderOptions;
     private final HeartbeatSender heartbeat;
 
     private final KeycloakClient keycloakClient;
@@ -35,11 +36,13 @@ public class HttpInvokerFactory implements InstanceFactory<HttpInvoker> {
             SessionRegistry sessionRegistry,
             RetryConfig retryConfig,
             HeartbeatSender heartbeat,
+            BifrostUploaderOptions bifrostUploaderOptions,
             KeycloakClient keycloakClient) {
         this.readOnlyChannels = readOnlyChannels;
         this.httpClient = httpClient;
         this.sessionRegistry = sessionRegistry;
         this.retryConfig = retryConfig;
+        this.bifrostUploaderOptions = bifrostUploaderOptions;
         this.heartbeat = heartbeat;
         this.keycloakClient = keycloakClient;
     }
@@ -53,6 +56,7 @@ public class HttpInvokerFactory implements InstanceFactory<HttpInvoker> {
                     httpClient,
                     retryConfig,
                     heartbeat,
+                    bifrostUploaderOptions,
                     keycloakClient));
         } catch (NoSuchAlgorithmException e) {
             throw new InstantiationException("Cannot create HttpInvoker: " + e.getMessage());

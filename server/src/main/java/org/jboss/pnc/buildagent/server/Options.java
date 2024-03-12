@@ -21,6 +21,8 @@ public class Options {
     private final int httpReadTimeout;
     private final int httpWriteTimeout;
 
+    private final BifrostUploaderOptions bifrostUploaderOptions;
+
     public Options(
         String host,
         int bindPort,
@@ -29,6 +31,7 @@ public class Options {
         boolean httpInvokerEnabled,
         int callbackMaxRetries,
         long callbackWaitBeforeRetry,
+        BifrostUploaderOptions bifrostUploaderOptions,
         String keycloakConfigFile,
         String keycloakClientConfigFile,
         int httpReadTimeout,
@@ -39,6 +42,7 @@ public class Options {
         this.httpInvokerEnabled = httpInvokerEnabled;
         this.callbackMaxRetries = callbackMaxRetries;
         this.callbackWaitBeforeRetry = callbackWaitBeforeRetry;
+        this.bifrostUploaderOptions = bifrostUploaderOptions;
         this.keycloakConfigFile = keycloakConfigFile;
         this.keycloakClientConfigFile = keycloakClientConfigFile;
         this.httpReadTimeout = httpReadTimeout;
@@ -102,4 +106,9 @@ public class Options {
     public int getHttpWriteTimeout() {
         return httpWriteTimeout;
     }
+
+    public BifrostUploaderOptions getBifrostUploaderOptions() {
+        return bifrostUploaderOptions;
+    }
+
 }
