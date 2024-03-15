@@ -21,6 +21,8 @@ package org.jboss.pnc.buildagent.common.security;
 import org.apache.http.impl.client.HttpClients;
 import org.keycloak.authorization.client.AuthzClient;
 import org.keycloak.authorization.client.Configuration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
@@ -35,6 +37,8 @@ public class KeycloakClient {
     private final String realm;
     private final String clientId;
     private final String clientSecret;
+
+    private final Logger logger = LoggerFactory.getLogger(KeycloakClient.class);
 
     public KeycloakClient(String url, String realm, String clientId, String clientSecret) {
         this.url = url;
@@ -62,6 +66,9 @@ public class KeycloakClient {
                 Collections.singletonMap("secret", clientSecret),
                 HttpClients.createDefault());
 
-        return AuthzClient.create(configuration).obtainAccessToken().getToken();
+        logger.info("Getting access token!");
+        String accessToken =  AuthzClient.create(configuration).obtainAccessToken().getToken();
+        logger.info("Received access token! :: {}", accessToken);
+        return accessToken;
     }
 }

@@ -228,6 +228,7 @@ public class HttpInvoker extends HttpServlet {
         logger.info("LogMetadata: {}", logMetadata);
         logger.info("Uploading now!");
         logUploader.uploadFile(bifrostUploaderOptions.getLogPath().toFile(), logMetadata, md5);
+        logger.info("Uploaded!");
     }
 
     private void authenticateCallback(Request original) {
