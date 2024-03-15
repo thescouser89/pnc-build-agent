@@ -200,12 +200,21 @@ public class HttpInvoker extends HttpServlet {
     }
 
     private void uploadLogsToBifrost(String md5) {
+        logger.info("Uploading logs to bifrost");
+        logger.info("URL: {}", bifrostUploaderOptions.getBifrostURL());
+        logger.info("Max retries: {}", bifrostUploaderOptions.getMaxRetries());
+        logger.info("Wait: {}", bifrostUploaderOptions.getWaitBeforeRetry());
+        logger.info("Path to send: {}", bifrostUploaderOptions.getLogPath());
+
         BifrostLogUploader logUploader = new BifrostLogUploader(URI.create(bifrostUploaderOptions.getBifrostURL()),
                 bifrostUploaderOptions.getMaxRetries(),
                 bifrostUploaderOptions.getWaitBeforeRetry(),
                 keycloakClient::getAccessToken);
 
         Map<String, String> mdc = bifrostUploaderOptions.getMdc();
+
+        logger.info("Creation done, creating logMetadata");
+        logger.info("MDC data: {}", mdc);
 
         LogMetadata logMetadata = LogMetadata.builder()
                 .tag("build-log")
@@ -216,6 +225,8 @@ public class HttpInvoker extends HttpServlet {
                 .tmp(mdc.get(MDCKeys.TMP_KEY))
                 .requestContext(mdc.get(MDCKeys.REQUEST_CONTEXT_KEY))
                 .build();
+        logger.info("LogMetadata: {}", logMetadata);
+        logger.info("Uploading now!");
         logUploader.uploadFile(bifrostUploaderOptions.getLogPath().toFile(), logMetadata, md5);
     }
 
