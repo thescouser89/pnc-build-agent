@@ -164,11 +164,13 @@ public class HttpInvoker extends HttpServlet {
                 uploadLogsToBifrost(md5);
             }
         } catch (IOException e) {
+            logger.error("Unable to flush stdout.", e);
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
                     .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
                     .message("Unable to flush stdout: " + e.getMessage());
         } catch (BifrostUploadException e) {
+            logger.error("Unable to upload logs.", e);
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
                     .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
