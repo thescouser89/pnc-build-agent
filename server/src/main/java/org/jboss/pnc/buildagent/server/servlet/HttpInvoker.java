@@ -11,6 +11,7 @@ import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.bifrost.upload.BifrostLogUploader;
 import org.jboss.pnc.bifrost.upload.BifrostUploadException;
 import org.jboss.pnc.bifrost.upload.LogMetadata;
+import org.jboss.pnc.bifrost.upload.TagOption;
 import org.jboss.pnc.buildagent.api.TaskStatusUpdateEvent;
 import org.jboss.pnc.buildagent.api.httpinvoke.Cancel;
 import org.jboss.pnc.buildagent.api.httpinvoke.InvokeRequest;
@@ -163,11 +164,13 @@ public class HttpInvoker extends HttpServlet {
                 uploadLogsToBifrost(md5);
             }
         } catch (IOException e) {
+            logger.error("Unable to flush stdout.", e);
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
                     .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
                     .message("Unable to flush stdout: " + e.getMessage());
         } catch (BifrostUploadException e) {
+            logger.error("Unable to upload logs.", e);
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
                     .newStatus(org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR)
@@ -208,9 +211,9 @@ public class HttpInvoker extends HttpServlet {
         Map<String, String> mdc = bifrostUploaderOptions.getMdc();
 
         LogMetadata logMetadata = LogMetadata.builder()
-                .tag("build-log")
+                .tag(TagOption.BUILD_LOG)
                 .endTime(OffsetDateTime.now())
-                .loggerName("build-agent")
+                .loggerName("org.jboss.pnc._userlog_.build-agent")
                 .processContext(mdc.get(MDCKeys.PROCESS_CONTEXT_KEY))
                 .processContextVariant(mdc.get(MDCKeys.PROCESS_CONTEXT_VARIANT_KEY))
                 .tmp(mdc.get(MDCKeys.TMP_KEY))
