@@ -30,4 +30,8 @@ public class StringLiner {
         }
         return null;
     }
+
+    public String currentlyBuffered(){
+        return stringBuffer.toString();
+    }
 }

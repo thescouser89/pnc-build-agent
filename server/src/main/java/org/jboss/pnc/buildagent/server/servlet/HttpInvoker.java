@@ -26,6 +26,7 @@ import org.jboss.pnc.buildagent.server.BifrostUploaderOptions;
 import org.jboss.pnc.buildagent.server.ReadOnlyChannel;
 import org.jboss.pnc.buildagent.server.httpinvoker.CommandSession;
 import org.jboss.pnc.buildagent.server.httpinvoker.SessionRegistry;
+import org.jboss.pnc.buildagent.server.logging.LogMatcher;
 import org.jboss.pnc.buildagent.server.termserver.StatusConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,9 +44,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Future;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.jboss.pnc.buildagent.api.Status.FAILED;
+import static org.jboss.pnc.buildagent.api.Status.SYSTEM_ERROR;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -72,6 +76,7 @@ public class HttpInvoker extends HttpServlet {
 
     private final KeycloakClient keycloakClient;
 
+    private final LogMatcher logMatcher;
 
     public HttpInvoker(
             Set<ReadOnlyChannel> readOnlyChannels,
@@ -90,6 +95,8 @@ public class HttpInvoker extends HttpServlet {
         this.heartbeat = heartbeat;
         this.stdoutChecksum = new Md5();
         this.keycloakClient = keycloakClient;
+        // NCL-6736: Check if we have and indy connection refused in our logs
+        this.logMatcher = new LogMatcher(Pattern.compile("Connect to indy.* failed: Connection refused"));
     }
 
     @Override
@@ -145,6 +152,7 @@ public class HttpInvoker extends HttpServlet {
     private void handleOutput(CommandSession commandSession, int[] stdOut) {
         byte[] buffer = Arrays.charIntstoBytes(stdOut, StandardCharsets.UTF_8);
         stdoutChecksum.add(buffer);
+        logMatcher.append(Arrays.charIntsToString(stdOut));
         commandSession.handleOutput(buffer);
     }
 
@@ -157,7 +165,7 @@ public class HttpInvoker extends HttpServlet {
             commandSession.close();
             updateEventBuilder
                     .taskId(commandSession.getSessionId())
-                    .newStatus(StatusConverter.fromTermdStatus(newStatus))
+                    .newStatus(resolveStatus(newStatus))
                     .outputChecksum(md5);
 
             if(bifrostUploaderOptions != null) {
@@ -200,6 +208,14 @@ public class HttpInvoker extends HttpServlet {
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize invoke object.", e);
         }
+    }
+
+    private org.jboss.pnc.buildagent.api.Status resolveStatus(Status newStatus) {
+        org.jboss.pnc.buildagent.api.Status status = StatusConverter.fromTermdStatus(newStatus);
+        if (status == FAILED && logMatcher.isMatched()) {
+            status = SYSTEM_ERROR;
+        }
+        return status;
     }
 
     private void uploadLogsToBifrost(String md5) {
