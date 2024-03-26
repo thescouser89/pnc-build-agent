@@ -13,6 +13,12 @@ public class Arrays {
         return string.getBytes(charset);
     }
 
+    public static String charIntsToString(int[] ints) {
+        return IntStream.of(ints)
+                .mapToObj(i -> new String(Character.toChars(i)))
+                .collect(Collectors.joining());
+    }
+
     public static int[] bytesToInts(byte[] bytes) {
         int[] ints = new int[bytes.length];
         for (int i = 0; i < bytes.length; i++) {
