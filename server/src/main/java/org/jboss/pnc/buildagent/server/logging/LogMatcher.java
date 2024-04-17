@@ -18,11 +18,15 @@
 package org.jboss.pnc.buildagent.server.logging;
 
 import org.jboss.pnc.buildagent.common.StringLiner;
+import org.jboss.pnc.buildagent.server.servlet.HttpInvoker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class LogMatcher {
+    private final Logger logger = LoggerFactory.getLogger(LogMatcher.class);
     private final Pattern pattern;
     private Matcher matcher;
     private boolean matched = false;
@@ -34,12 +38,15 @@ public class LogMatcher {
         matcher = pattern.matcher("");
     }
     public void append(String string) {
+        logger.info(">> Appended: {}", string);
         sl.append(string);
 
         String line = sl.nextLine();
         while (line != null){
+            logger.info("<<<< Processing line: {}", line);
             matcher.reset(line);
             if (matcher.find()) {
+                logger.info("<<>> matched!");
                 matched = true;
             }
             line = sl.nextLine();
