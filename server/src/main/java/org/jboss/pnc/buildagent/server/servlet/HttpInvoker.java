@@ -189,6 +189,7 @@ public class HttpInvoker extends HttpServlet {
         try {
             String data = objectMapper.writeValueAsString(updateEventBuilder.build());
             authenticateCallback(callback);
+            logger.info("|||||| Data to send back: {}", data);
             httpClient.invoke(
                     callback,
                     ByteBuffer.wrap(data.getBytes(UTF_8)),
