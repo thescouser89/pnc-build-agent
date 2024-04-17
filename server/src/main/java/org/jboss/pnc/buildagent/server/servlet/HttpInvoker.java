@@ -212,7 +212,9 @@ public class HttpInvoker extends HttpServlet {
 
     private org.jboss.pnc.buildagent.api.Status resolveStatus(Status newStatus) {
         org.jboss.pnc.buildagent.api.Status status = StatusConverter.fromTermdStatus(newStatus);
+        logger.info("Build status is " + status);
         if (status == FAILED && logMatcher.isMatched()) {
+            logger.info("Found error message in log, changing status from FAILED to SYSTEM_ERROR");
             status = SYSTEM_ERROR;
         }
         return status;
