@@ -152,6 +152,7 @@ public class Main {
         int callbackMaxRetries = Integer.parseInt(getOption(cmd, "callbackMaxRetries", "10"));
         long callbackWaitBeforeRetry = Long.parseLong(getOption(cmd, "callbackWaitBeforeRetry", "500"));
         String keycloakConfigFile = getOption(cmd, "keycloakConfig", "");
+        String keycloakOfflineConfigFile = getOption(cmd, "keycloakOfflineConfig", "");
         String keycloakClientConfigFile = getOption(cmd, "keycloakClientConfig", "");
 
         String httpReadTimeoutString = getOption(cmd, "httpReadTimeout", null);
@@ -190,6 +191,7 @@ public class Main {
                 callbackWaitBeforeRetry,
                 bifrostUploaderOptions,
                 keycloakConfigFile,
+                keycloakOfflineConfigFile,
                 keycloakClientConfigFile,
                 httpReadTimeout,
                 httpWriteTimeout);

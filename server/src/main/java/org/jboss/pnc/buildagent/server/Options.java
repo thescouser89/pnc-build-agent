@@ -17,6 +17,11 @@ public class Options {
     private final int callbackMaxRetries;
     private final long callbackWaitBeforeRetry;
     private String keycloakConfigFile;
+
+    /**
+     * Specify this if we want to verify the access token from a request offline
+     */
+    private String keycloakOfflineConfigFile;
     private String keycloakClientConfigFile;
     private final int httpReadTimeout;
     private final int httpWriteTimeout;
@@ -33,6 +38,7 @@ public class Options {
         long callbackWaitBeforeRetry,
         BifrostUploaderOptions bifrostUploaderOptions,
         String keycloakConfigFile,
+        String keycloakOfflineConfigFile,
         String keycloakClientConfigFile,
         int httpReadTimeout,
         int httpWriteTimeout) {
@@ -44,6 +50,7 @@ public class Options {
         this.callbackWaitBeforeRetry = callbackWaitBeforeRetry;
         this.bifrostUploaderOptions = bifrostUploaderOptions;
         this.keycloakConfigFile = keycloakConfigFile;
+        this.keycloakOfflineConfigFile = keycloakOfflineConfigFile;
         this.keycloakClientConfigFile = keycloakClientConfigFile;
         this.httpReadTimeout = httpReadTimeout;
         this.httpWriteTimeout = httpWriteTimeout;
@@ -93,6 +100,10 @@ public class Options {
 
     public String getKeycloakConfigFile() {
         return keycloakConfigFile;
+    }
+
+    public String getKeycloakOfflineConfigFile() {
+        return keycloakOfflineConfigFile;
     }
 
     public String getKeycloakClientConfigFile() {
