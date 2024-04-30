@@ -53,6 +53,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.DispatcherType;
+import javax.servlet.Filter;
 import javax.servlet.ServletException;
 import java.io.File;
 import java.io.IOException;
@@ -118,15 +119,8 @@ public class BootstrapUndertow {
                         servlet("DownloaderServlet", Download.class)
                                 .addMapping("/download/*"));
 
-        if (!Strings.isEmpty(options.getKeycloakConfigFile())) {
-            FilterInfo keycloakOIDCFilter = Servlets.filter(KeycloakOIDCFilter.class.getSimpleName(), KeycloakOIDCFilter.class);
-            keycloakOIDCFilter.addInitParam(CONFIG_FILE_PARAM, options.getKeycloakConfigFile());
-            servletBuilder.addFilter(keycloakOIDCFilter);
-            servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), "/terminal/*", DispatcherType.REQUEST);
-            servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), "/upload/*", DispatcherType.REQUEST);
-        } else {
-            log.warn("Endpoint authentication is NOT ENABLED!. Specify keycloak config file.");
-        }
+        configureKeycloak(options, servletBuilder, "/terminal/*");
+        configureKeycloak(options, servletBuilder, "/upload/*");
 
         if (options.isHttpInvokerEnabled()) {
 
@@ -162,11 +156,7 @@ public class BootstrapUndertow {
                                     options.getBifrostUploaderOptions(),
                                     keycloakClient)
                     ).addMapping(HTTP_INVOKER_PATH + "/*"));
-            if (!Strings.isEmpty(options.getKeycloakConfigFile())) {
-                servletBuilder.addFilterUrlMapping(KeycloakOIDCFilter.class.getSimpleName(), HTTP_INVOKER_PATH + "/*", DispatcherType.REQUEST);
-            } else {
-                log.warn("Endpoint authentication is NOT ENABLED!. Specify keycloak config file.");
-            }
+            configureKeycloak(options, servletBuilder, HTTP_INVOKER_PATH + "/*");
         }
 
         DeploymentManager manager = defaultContainer().addDeployment(servletBuilder);
@@ -331,5 +321,43 @@ public class BootstrapUndertow {
         }
 
         return result;
+    }
+
+    private void configureKeycloak(Options options, DeploymentInfo servletBuilder, String mapping) {
+
+        boolean isKeycloakOfflineConfigFileSpecified = !Strings.isEmpty(options.getKeycloakOfflineConfigFile());
+        boolean isKeycloakConfigFileSpecified = !Strings.isEmpty(options.getKeycloakConfigFile());
+
+        if (isKeycloakOfflineConfigFileSpecified && isKeycloakConfigFileSpecified) {
+            log.warn("Both keycloakOfflineConfig and keycloakConfig configured! Only keycloakOfflineConfig will be used");
+        }
+
+        // if no keycloak configuration is specified at all
+        if (!isKeycloakOfflineConfigFileSpecified && !isKeycloakConfigFileSpecified) {
+            log.warn("Endpoint authentication is NOT ENABLED!. Specify keycloak config file.");
+            return;
+        }
+
+        // if we are here, we need to configure a keycloak filter
+        Class<? extends Filter> filterClassName = null;
+        String configFile = null;
+
+        if (isKeycloakOfflineConfigFileSpecified) {
+
+            filterClassName = KeycloakOfflineOIDCFilter.class;
+            configFile = options.getKeycloakOfflineConfigFile();
+
+        } else if (isKeycloakConfigFileSpecified) {
+
+            filterClassName = KeycloakOIDCFilter.class;
+            configFile = options.getKeycloakConfigFile();
+
+        }
+
+        FilterInfo keycloakOIDCFilter = Servlets.filter(filterClassName.getSimpleName(), filterClassName);
+        keycloakOIDCFilter.addInitParam(CONFIG_FILE_PARAM, configFile);
+
+        servletBuilder.addFilter(keycloakOIDCFilter);
+        servletBuilder.addFilterUrlMapping(filterClassName.getSimpleName(), mapping, DispatcherType.REQUEST);
     }
 }
