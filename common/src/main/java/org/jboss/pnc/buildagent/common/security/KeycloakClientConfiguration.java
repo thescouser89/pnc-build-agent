@@ -17,6 +17,7 @@
  */
 package org.jboss.pnc.buildagent.common.security;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
@@ -28,11 +29,27 @@ public class KeycloakClientConfiguration {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    static {
+        OBJECT_MAPPER.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
+
 
     private String url;
     private String realm;
     private String clientId;
     private String clientSecret;
+
+    /**
+     * https://github.com/project-ncl/trustbox
+     * Trustbox is a tiny OIDC proxy for the real keycloak server, to workaround firewall + multiple IP address issue we
+     * have with keycloak server
+     */
+    private String trustboxUrl = null;
+
+    /**
+     * Whether to use the trustbox proxy or not
+     */
+    private boolean useTrustbox = false;
 
     /**
      * Parse a JSON file containing the appropriate configuration to produce a KeycloakClientConfiguration
@@ -79,5 +96,21 @@ public class KeycloakClientConfiguration {
 
     public void setClientSecret(String clientSecret) {
         this.clientSecret = clientSecret;
+    }
+
+    public String getTrustboxUrl() {
+        return trustboxUrl;
+    }
+
+    public void setTrustboxUrl(String trustboxUrl) {
+        this.trustboxUrl = trustboxUrl;
+    }
+
+    public boolean isUseTrustbox() {
+        return useTrustbox;
+    }
+
+    public void setUseTrustbox(boolean useTrustboxProxy) {
+        this.useTrustbox = useTrustboxProxy;
     }
 }

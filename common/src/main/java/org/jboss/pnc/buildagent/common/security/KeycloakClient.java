@@ -21,6 +21,8 @@ package org.jboss.pnc.buildagent.common.security;
 import org.apache.http.impl.client.HttpClients;
 import org.keycloak.authorization.client.AuthzClient;
 import org.keycloak.authorization.client.Configuration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
@@ -31,16 +33,22 @@ import java.util.Collections;
  */
 public class KeycloakClient {
 
+    private static Logger LOGGER = LoggerFactory.getLogger(KeycloakClient.class);
+
     private final String url;
     private final String realm;
     private final String clientId;
     private final String clientSecret;
+    private final String trustboxUrl;
+    private final boolean useTrustbox;
 
-    public KeycloakClient(String url, String realm, String clientId, String clientSecret) {
+    public KeycloakClient(String url, String realm, String clientId, String clientSecret, String trustboxUrl, boolean useTrustbox) {
         this.url = url;
         this.realm = realm;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
+        this.trustboxUrl = trustboxUrl;
+        this.useTrustbox = useTrustbox;
     }
 
     public KeycloakClient(KeycloakClientConfiguration configuration) {
@@ -48,6 +56,8 @@ public class KeycloakClient {
         this.realm = configuration.getRealm();
         this.clientId = configuration.getClientId();
         this.clientSecret = configuration.getClientSecret();
+        this.trustboxUrl =configuration.getTrustboxUrl();
+        this.useTrustbox = configuration.isUseTrustbox();
     }
 
     /**
@@ -55,6 +65,16 @@ public class KeycloakClient {
      * @return access token
      */
     public String getAccessToken() {
+        if (useTrustbox) {
+            LOGGER.info("Getting keycloak access token from trustbox");
+            return getAccessTokenFromTrustbox();
+        } else {
+            LOGGER.info("Getting keycloak access token from Keycloak server");
+            return getAccessTokenFromKeycloakServer();
+        }
+    }
+
+    private String getAccessTokenFromKeycloakServer() {
         final Configuration configuration = new Configuration(
                 url,
                 realm,
@@ -63,5 +83,9 @@ public class KeycloakClient {
                 HttpClients.createDefault());
 
         return AuthzClient.create(configuration).obtainAccessToken().getToken();
+    }
+
+    private String getAccessTokenFromTrustbox() {
+        return TrustboxClient.getAccessToken(trustboxUrl, url + "/realms/" + realm, clientId, clientSecret);
     }
 }
