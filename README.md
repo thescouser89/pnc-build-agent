@@ -48,8 +48,55 @@ The filename should have the following content:
     "url": "https://keycloak-url",
     "realm": "realm",
     "clientId": "client-id",
+    "clientSecret": "client-secret",
+    "trustboxUrl": "http://url",
+    "useTrustbox": false
+}
+```
+(The trustbox stuff is explained below)
+
+Only client credentials flow (service account authentication) is supported at this moment.
+
+## Keycloak jump box (Trustbox)
+
+Since the build-agent is typically run inside a hermetic environment where outgoing connections are blocked by a
+firewall unless in an allow-list [1], this causes problems when talking to the Keycloak server. (See
+the `keycloakConfigurationFile` for validation of received of OIDC access token without talking to the Keycloak server).
+
+When the build-agent wants to get a new OIDC access token to talk to other services, it will have trouble reaching out
+to the Keycloak server. Instead, we can use a "jump box" for:
+
+```
+build-agent --> jump box --> keycloak server
+```
+
+The jump box project can be found [here](https://github.com/project-ncl/trustbox).
+
+The jump box will always have the same IP address[2] (as opposed to the Keycloak server) that we can add to the allow-list.
+It acts as a proxy to the Keycloak server, and nothing more. The implementation can be found [here](https://github.com/thescouser89/trustbox).
+
+The request to the server is:
+```
+# POST to endpoint jumpbox/oidc/token with content
+{
+    "authServerUrl": "https://auth.server/auth/realms/realm",
+    "clientId": "client-id",
     "clientSecret": "client-secret"
 }
 ```
+with response:
+```
+{
+    "accessToken": "blabla"
+}
+```
 
-Only client credentials flow (service account authentication) is supported at this moment.
+While it's scary that we are sending secrets to the jump box, the latter does not log the values and stores the data. It
+really just acts as a proxy.
+
+It is activated by using the keycloakClientConfigFile and setting useTrustbox = true with the trustbox url pointing to a real server.
+
+[1]: There are multiple IP addresses that map to our Keycloak server, and there are no guarantees that the IP addresses
+will always stay the same. Therefore we need to find another solution
+
+[2]: we can guarantee this by using the Kubernetes service object which always has the same IP address
