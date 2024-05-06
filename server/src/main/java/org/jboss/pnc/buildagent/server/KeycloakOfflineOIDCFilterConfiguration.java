@@ -13,6 +13,10 @@ public class KeycloakOfflineOIDCFilterConfiguration {
      */
     private String authServerUrl;
 
+    // needed for jackson
+    public KeycloakOfflineOIDCFilterConfiguration() {
+    }
+
     public KeycloakOfflineOIDCFilterConfiguration(String publicKey, String authServerUrl) {
         this.publicKey = publicKey;
         this.authServerUrl = authServerUrl;
