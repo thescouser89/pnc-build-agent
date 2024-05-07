@@ -27,9 +27,11 @@ The `keycloakConfigurationFile` follows the [keycloak.json](https://www.keycloak
 In contrast, the `keycloakOfflineConfigurationFile` is used to validate the token using offline techniques only using the public key (obtained from {auth url}/auth/realms/{realm}) and the issuer url only. This is useful when we run build-agent inside a firewall that limits outgoing connections to other servers. The format of the file to provide is:
 ```json
 {
-  "publicKey": "public-key",
-  "authServerUrl": "{auth-url}/auth/realms/{realm}"
+  "realm-public-key": "public-key",
+  "auth-server-url": "{auth-url}/auth",
+  "realm": "hahaha"
 }
+and is very similar to the one for keycloak.json.
 ```
 
 If both options are specified, only the offline one will be used.
