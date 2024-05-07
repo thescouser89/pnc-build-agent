@@ -50,7 +50,11 @@ public class KeycloakOfflineOIDCFilter implements Filter {
         HttpServletResponse response = (HttpServletResponse) res;
         String authToken = request.getHeader("Authorization").replace("Bearer", "").trim();
         try {
-            KeycloakOfflineTokenVerifier.verify(authToken, configuration.getPublicKey(), configuration.getAuthServerUrl());
+            KeycloakOfflineTokenVerifier.verify(authToken, configuration.getRealmPublicKey(), configuration.getAuthServerUrl(), configuration.getRealm());
+
+            // all good, no exceptions thrown.
+            filterChain.doFilter(req, res);
+            return;
         } catch (Exception e) {
             log.warning("Authorization failed with error: " + e);
             response.sendError(403);

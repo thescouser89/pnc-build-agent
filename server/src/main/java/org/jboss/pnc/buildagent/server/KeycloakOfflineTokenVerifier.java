@@ -23,7 +23,7 @@ public class KeycloakOfflineTokenVerifier {
      * @param authServerUrl auth-server-url in format: {auth url}/auth/realms/{realm}. Used to verify source of token matches the one we want
      * @throws Exception if verification fails
      */
-    public static void verify(String jwtString, String publicKey, String authServerUrl) throws Exception {
+    public static void verify(String jwtString, String publicKey, String authServerUrl, String realm) throws Exception {
 
         // if the public key doesn't match (token is compromised) then this throws an exception.
         // if the token is expired, this also throws an exception
@@ -31,7 +31,7 @@ public class KeycloakOfflineTokenVerifier {
 
         String tokenIssuer = jws.getPayload().getIssuer();
 
-        if (!tokenIssuer.equals(authServerUrl)) {
+        if (!tokenIssuer.equals(authServerUrl + "/realms/" + realm)) {
             throw new RuntimeException("Token issuer " + tokenIssuer + " doesn't match with the configured issuer: " + authServerUrl);
         }
     }
