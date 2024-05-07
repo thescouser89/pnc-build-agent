@@ -20,7 +20,9 @@ public class KeycloakOfflineTokenVerifierTest {
 
         KeyPair kp = generateRSAKeyPair();
         Instant now = Instant.now();
-        String issuer = "https://rudolph/test";
+        String authServerUrl = "https://rudolph";
+        String realm = "test";
+        String issuer = authServerUrl + "/realms/" + realm;
 
         String jwtToken = Jwts.builder()
                 .claim("name", "Jane Doe")
@@ -33,7 +35,7 @@ public class KeycloakOfflineTokenVerifierTest {
                 .signWith(kp.getPrivate())
                 .compact();
 
-        KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kp.getPublic()), issuer);
+        KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kp.getPublic()), authServerUrl, realm);
     }
 
     @Test
@@ -41,7 +43,9 @@ public class KeycloakOfflineTokenVerifierTest {
 
         KeyPair kp = generateRSAKeyPair();
         Instant now = Instant.now();
-        String issuer = "https://rudolph/test";
+        String authServerUrl = "https://rudolph";
+        String realm = "test";
+        String issuer = authServerUrl + "/realms/" + realm;
 
         // this token has already expired
         String jwtToken = Jwts.builder()
@@ -56,7 +60,7 @@ public class KeycloakOfflineTokenVerifierTest {
                 .compact();
 
         // token expired, so this should fail
-        Assert.assertThrows(Exception.class, () -> KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kp.getPublic()), issuer));
+        Assert.assertThrows(Exception.class, () -> KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kp.getPublic()), authServerUrl, realm));
     }
 
     @Test
@@ -66,7 +70,9 @@ public class KeycloakOfflineTokenVerifierTest {
         KeyPair kpSecond = generateRSAKeyPair();
 
         Instant now = Instant.now();
-        String issuer = "https://rudolph/test";
+        String authServerUrl = "https://rudolph";
+        String realm = "test";
+        String issuer = authServerUrl + "/realms/" + realm;
 
         // this token has already expired
         String jwtToken = Jwts.builder()
@@ -81,7 +87,7 @@ public class KeycloakOfflineTokenVerifierTest {
                 .compact();
 
         // use a completely different public key, this verification should fail
-        Assert.assertThrows(Exception.class, () -> KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kpSecond.getPublic()), issuer));
+        Assert.assertThrows(Exception.class, () -> KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kpSecond.getPublic()), authServerUrl, realm));
     }
 
     @Test
@@ -103,7 +109,7 @@ public class KeycloakOfflineTokenVerifierTest {
                 .compact();
 
         // all good, except with the wrong issuer
-        Assert.assertThrows(Exception.class, () -> KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kp.getPublic()), "https://booya.com/no"));
+        Assert.assertThrows(Exception.class, () -> KeycloakOfflineTokenVerifier.verify(jwtToken, textPublicKey(kp.getPublic()), "https://booya.com/no", "way"));
     }
 
     private KeyPair generateRSAKeyPair() throws Exception {
