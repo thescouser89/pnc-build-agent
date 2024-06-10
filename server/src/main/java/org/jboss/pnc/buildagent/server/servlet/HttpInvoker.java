@@ -157,6 +157,13 @@ public class HttpInvoker extends HttpServlet {
     }
 
     private void onComplete(CommandSession commandSession, Status newStatus, Request callback) {
+
+        // some requests like startSshd don't come with a callback.
+        if (callback == null) {
+            logger.info("No callback with the request. Skipping onComplete");
+            return;
+        }
+
         TaskStatusUpdateEvent.Builder updateEventBuilder = TaskStatusUpdateEvent.newBuilder();
         updateEventBuilder.context(callback.getAttachment());
         String md5;
