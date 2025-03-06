@@ -117,12 +117,11 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         try {
             response = responseFuture.get(executeTimeout, unit);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            throw new BuildAgentClientException("No response form the remote agent.", e);
+            logger.error("No response from the remote agent.", e);
+            throw new BuildAgentClientException("No response from the remote agent.", e);
         }
-        logger.debug("Response code: {}, body: {}.", response.getCode(), response.getStringResult());
         try {
-            InvokeResponse invokeResponse = objectMapper.readValue(response.getStringResult().getString(), InvokeResponse.class);
-            sessionId = invokeResponse.getSessionId();
+            sessionId = parseSessionID(response);
         } catch (IOException e) {
             throw new BuildAgentClientException("Cannot read command invocation response.", e);
         }
@@ -133,13 +132,17 @@ public class BuildAgentHttpClient extends BuildAgentClientBase implements BuildA
         return internalExecuteAsync(command, this.heartbeatConfig)
                 .thenApply(response -> {
                     try {
-                        logger.debug("Response code: {}, body: {}.", response.getCode(), response.getStringResult());
-                        InvokeResponse invokeResponse = objectMapper.readValue(response.getStringResult().getString(), InvokeResponse.class);
-                        return invokeResponse.getSessionId();
-                    } catch (Exception e) {
+                        return parseSessionID(response);
+                    } catch (IOException e) {
                         throw new CompletionException(new BuildAgentClientException("Cannot read command invocation response.", e));
                     }
                 });
+    }
+
+    private String parseSessionID (HttpClient.Response response) throws IOException {
+        logger.debug("Response code: {}, body: {}.", response.getCode(), response.getStringResult().getString());
+        InvokeResponse invokeResponse = objectMapper.readValue(response.getStringResult().getString(), InvokeResponse.class);
+        return invokeResponse.getSessionId();
     }
 
     private CompletableFuture<HttpClient.Response> internalExecuteAsync(
