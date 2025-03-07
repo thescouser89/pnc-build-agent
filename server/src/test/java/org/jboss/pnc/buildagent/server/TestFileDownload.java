@@ -74,7 +74,7 @@ public class TestFileDownload {
 
         HttpClient.Response response = responseFuture.get(10, TimeUnit.SECONDS);
         Assert.assertEquals("Invalid response code.", 200, response.getCode());
-        log.info("Received file content: {}", response.getStringResult());
+        log.info("Received file content: {}", response.getStringResult().getString());
         Assert.assertEquals(fileContent, response.getStringResult().getString());
 
         filePath.toFile().delete();
