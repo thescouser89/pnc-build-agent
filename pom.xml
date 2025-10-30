@@ -460,6 +460,7 @@
           <autoVersionSubmodules>true</autoVersionSubmodules>
           <useReleaseProfile>false</useReleaseProfile>
           <releaseProfiles>gpg-sign,release</releaseProfiles>
+          <signTag>false</signTag>
           <goals>deploy</goals>
         </configuration>
       </plugin>
