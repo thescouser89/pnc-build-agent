@@ -39,6 +39,7 @@
     <version.jackson>2.20.0</version.jackson>
     <version.jackson.databind>2.20.0</version.jackson.databind>
     <version.logback.contrib>0.1.5</version.logback.contrib>
+    <version.source.plugin>3.3.1</version.source.plugin>
 
     <jdk.min.version>1.8</jdk.min.version>
     <maven.min.version>3.2</maven.min.version>
@@ -411,35 +412,20 @@
             </archive>
           </configuration>
         </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-javadoc-plugin</artifactId>
-          <configuration>
-            <source>8</source>
-          </configuration>
-          <executions>
-            <execution>
-              <id>attach-javadocs</id>
-              <goals>
-                <goal>jar</goal>
-              </goals>
-            </execution>
-          </executions>
-        </plugin>
-        <plugin>
-          <groupId>org.sonatype.central</groupId>
-          <artifactId>central-publishing-maven-plugin</artifactId>
-          <version>0.9.0</version>
-          <extensions>true</extensions>
-          <configuration>
-            <!-- as defined in your settings.xml -->
-            <publishingServerId>central-publisher</publishingServerId>
-          </configuration>
-        </plugin>
       </plugins>
     </pluginManagement>
 
     <plugins>
+      <plugin>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>0.9.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <!-- as defined in your settings.xml -->
+          <publishingServerId>central-publisher</publishingServerId>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>
@@ -508,24 +494,51 @@
       <id>release</id>
       <build>
         <plugins>
-          <plugin>
-            <groupId>org.sonatype.plugins</groupId>
-            <artifactId>nexus-staging-maven-plugin</artifactId>
-          </plugin>
-          <plugin>
-              <groupId>org.apache.maven.plugins</groupId>
-              <artifactId>maven-gpg-plugin</artifactId>
-              <version>3.2.8</version>
-              <executions>
-                  <execution>
-                      <id>sign-artifacts</id>
-                      <phase>verify</phase>
-                      <goals>
-                          <goal>sign</goal>
-                      </goals>
-                  </execution>
-              </executions>
-          </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${version.source.plugin}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${version.javadoc.plugin}</version>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <detectOfflineLinks>false</detectOfflineLinks>
+                            <quiet>true</quiet>
+                            <doclint>none</doclint>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>3.2.8</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
       </build>
     </profile>
