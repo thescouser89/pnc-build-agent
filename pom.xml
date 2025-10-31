@@ -315,6 +315,11 @@
         <version>${version.junit}</version>
         <scope>test</scope>
       </dependency>
+      <dependency>
+        <groupId>org.bouncycastle</groupId>
+        <artifactId>bcprov-jdk18on</artifactId>
+        <version>1.82</version>
+      </dependency>
 
     </dependencies>
   </dependencyManagement>
