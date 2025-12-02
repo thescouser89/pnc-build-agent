@@ -39,7 +39,7 @@
     <version.jackson>2.20.1</version.jackson>
     <version.jackson.databind>2.20.1</version.jackson.databind>
     <version.logback.contrib>0.1.5</version.logback.contrib>
-    <version.source.plugin>3.3.1</version.source.plugin>
+    <version.source.plugin>3.4.0</version.source.plugin>
 
     <jdk.min.version>1.8</jdk.min.version>
     <maven.min.version>3.2</maven.min.version>
