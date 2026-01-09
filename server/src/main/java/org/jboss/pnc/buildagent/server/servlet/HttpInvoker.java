@@ -229,9 +229,9 @@ public class HttpInvoker extends HttpServlet {
 
     private void uploadLogsToBifrost(String md5) {
         BifrostLogUploader logUploader = new BifrostLogUploader(URI.create(bifrostUploaderOptions.getBifrostURL()),
+                keycloakClient::getAccessToken,
                 bifrostUploaderOptions.getMaxRetries(),
-                bifrostUploaderOptions.getWaitBeforeRetry(),
-                keycloakClient::getAccessToken);
+                bifrostUploaderOptions.getWaitBeforeRetry());
 
         Map<String, String> mdc = bifrostUploaderOptions.getMdc();
 
