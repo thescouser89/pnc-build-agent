@@ -67,10 +67,10 @@ public class KeycloakClient {
     public String getAccessToken() {
         if (useTrustbox) {
             LOGGER.info("Getting keycloak access token from trustbox");
-            return getAccessTokenFromTrustbox();
+            return "Bearer " + getAccessTokenFromTrustbox();
         } else {
             LOGGER.info("Getting keycloak access token from Keycloak server");
-            return getAccessTokenFromKeycloakServer();
+            return "Bearer " + getAccessTokenFromKeycloakServer();
         }
     }
 
