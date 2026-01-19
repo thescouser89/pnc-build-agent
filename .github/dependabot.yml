@@ -9,3 +9,8 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "org.jboss.logmanager:log4j-jboss-logmanager"
+      - dependency-name: "org.jboss.pnc:pnc-common"
+      - dependency-name: "org.jboss.slf4j:slf4j-jboss-logmanager"
+      - dependency-name: "org.wildfly.core:wildfly-logging"
