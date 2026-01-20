@@ -14,3 +14,9 @@ updates:
       - dependency-name: "org.jboss.pnc:pnc-common"
       - dependency-name: "org.jboss.slf4j:slf4j-jboss-logmanager"
       - dependency-name: "org.wildfly.core:wildfly-logging"
+
+  - package-ecosystem: "github-actions" # Also update Github actions
+    directory: "/"
+    schedule:
+      # Check for updates to GitHub Actions every week
+      interval: "weekly"
